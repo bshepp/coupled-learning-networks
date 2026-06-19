@@ -56,3 +56,57 @@ def verdict(local_error, baseline_error, sign_match, rho, tol=0.15, sm_thresh=0.
     return {"status": status, "local_error": float(local_error),
             "baseline_error": float(baseline_error), "sign_match": float(sign_match),
             "rho": float(rho)}
+
+
+# --- Experiment B: mechanical parity-3 ---------------------------------------
+from spring_network import SpringNetwork, triangulated_lattice, default_rest_lengths, dof
+
+
+def parity3_mech_task(rows=4, cols=4, d=0.3, seed=0):
+    """Triangulated lattice; 3 input nodes on the bottom row (driven in y by +/-d), output node
+    top-right (read y-displacement), bottom-left corner pinned fully + one more DOF to remove
+    rigid-body motion. Targets span the achievable readout range for the nudge."""
+    x0, edges = triangulated_lattice(rows, cols)
+    in_nodes = [0 * cols + 0, 0 * cols + (cols // 2), 0 * cols + (cols - 1)]  # bottom row
+    out_node = (rows - 1) * cols + (cols - 1)                                 # top-right
+    pin_node = 0 * cols + 1                                                   # a bottom node not an input
+    input_dofs = [dof(nd, 1) for nd in in_nodes]                              # drive in y
+    pinned_dofs = [dof(pin_node, 0), dof(pin_node, 1), dof(in_nodes[0], 0)]   # 2 + 1 DOFs
+    net = SpringNetwork(x0, edges, pinned_dofs=pinned_dofs, input_dofs=input_dofs,
+                        output_dof=dof(out_node, 1))
+    patterns = np.array([[1 - 2 * ((i >> b) & 1) for b in range(3)] for i in range(8)], float)
+    labels = np.prod(patterns, axis=1)
+    return {"net": net, "patterns": patterns, "labels": labels, "d": d,
+            "target_pos": +0.5 * d, "target_neg": -0.5 * d}
+
+
+def two_sided_separation(r, y):
+    """Separable in EITHER polarity: max(min(+)-max(-), min(-)-max(+)). >0 iff a threshold splits
+    the classes; <=0 iff they overlap. (Ported idiom from self-assembly/stage1_network.py.)"""
+    r = np.asarray(r, float); y = np.asarray(y)
+    pos, neg = r[y > 0], r[y < 0]
+    if pos.size == 0 or neg.size == 0:
+        return float("-inf")   # only one class present: two-sided separation is undefined
+    return float(max(np.min(pos) - np.max(neg), np.min(neg) - np.max(pos)))
+
+
+def verdict_b(local_sep, baseline_sep, floor, jump_rate, sign_match, rho,
+              k=3.0, jump_max=0.2, sm_min=0.9, rho_min=0.8):
+    """Five-way verdict, evaluated in order: multistability gate, then representability,
+    learnability, PASS (SNR>=k and aligned and low jumps), else AMBIGUOUS."""
+    snr = local_sep / floor if floor > 0 else float("inf")
+    base_snr = baseline_sep / floor if floor > 0 else float("inf")
+    out = {"local_sep": float(local_sep), "baseline_sep": float(baseline_sep),
+           "snr": float(snr), "jump_rate": float(jump_rate),
+           "sign_match": float(sign_match), "rho": float(rho)}
+    if jump_rate > jump_max:
+        out["status"] = "MULTISTABILITY-FORECLOSE"
+    elif baseline_sep <= 0 or base_snr < 1.0:
+        out["status"] = "FORECLOSE-REPRESENTABILITY"
+    elif local_sep <= 0 or snr < 1.0:
+        out["status"] = "FORECLOSE-LEARNABILITY"
+    elif snr >= k and sign_match >= sm_min and rho >= rho_min:
+        out["status"] = "PASS"
+    else:
+        out["status"] = "AMBIGUOUS"
+    return out

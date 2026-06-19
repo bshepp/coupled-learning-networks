@@ -1,66 +1,98 @@
 # Coupled-Learning Networks
 
-Decentralized, **physics-driven** learning in passive resistor/flow networks. The question this
-project answers: *when a network adapts to a task, **who computes the weight update?*** If a CPU
-optimizer does it, the substrate is a peripheral. The goal is a rule where every weight change is
-derivable from quantities **physically local** to each element — the substrate's own physics performs
-the update.
+Decentralized, **physics-driven** learning in passive physical networks. The question this project
+answers: *when a network adapts to a task, **who computes the weight update?*** If a CPU optimizer does
+it, the substrate is a peripheral. The goal is a rule where every weight change is derivable from
+quantities **physically local** to each element — the substrate's own physics performs the update.
 
 This is project `01` (the flagship) of the **physical-learning-substrates** portfolio, branching from
-the co-located ionic computing line.
+the co-located ionic computing line. It contains two experiments in two media.
 
-## Thesis under test
+## Status
 
-A learning substrate where *the signal being processed is the same physical event that reshapes the
-processor* — compute and weight-update co-located. **Experiment A** (this repo's first milestone)
-demonstrates the mechanism on *friendly* tasks a passive positive-conductance network can represent:
+| Experiment | Substrate | Task | Verdict |
+|---|---|---|---|
+| **A** | resistor / flow network (scalar potential) | allostery + regression | **PASS** — the physics computes the update |
+| **B** | 2D nonlinear spring network (signed displacements) | parity-3 | **FORECLOSE** — elastic state can't clear the wall |
 
-- **Allostery** — train edge conductances so a source drive produces a target response at distant nodes
-  (Stern *PRX* 2021; Dillavou *PRApplied* 2022).
-- **Regression** — learn a representable linear input→output map.
+**Experiment A (PASS).** A passive resistor network, trained only by the local two-phase
+coupled-learning rule, reaches the offline optimizer's error on allostery and regression, and its
+per-step update equals the true loss gradient as the nudge `β→0` (sign-match 1.0, ρ 1.0). The audit log
+confirms 100% physics-local updates. *The dual-role learning thesis is real in a substrate.* (Positive
+conductances obey the maximum principle, so A is deliberately **not** for parity.)
 
-The verdict is twofold: the local **coupled-learning** rule must (1) reach the offline optimizer's task
-error, and (2) produce updates that align with the true loss gradient as the nudge `β→0` (the
-equilibrium-propagation limit). An **audit hook** logs that every headline update is physics-local.
+**Experiment B (FORECLOSE).** The signed/non-monotone elastic substrate does **not** clear the parity-3
+wall, in a two-part way: (1) in the stable low-deformation regime the offline optimizer cannot represent
+parity-3 anywhere swept (deformation `d`, asymmetry `α`, network size, random inits → separation always
+negative); (2) the deformation needed for strong non-monotonicity is exactly where the network buckles
+(indefinite tangent stiffness → multistability), so the two-phase rule becomes ill-defined. The
+*mechanism* is sound — the keystone confirms the local rule equals the true gradient (ρ 1.0). The limit is
+the substrate, not co-located learning. → **The wall is deeper than passivity**; escalate to project `03`
+(energy-based/Ising). See `docs/superpowers/specs/2026-06-19-experiment-b-findings.md`.
 
-> Experiment B (signed/non-monotone elastic networks attempting parity-3) is deferred to its own spec —
-> it needs a vector nonlinear solver and faces a multistability risk. Positive conductances here share
-> the maximum-principle wall, so Experiment A is deliberately **not** for parity.
+## The shared harness
+
+Both experiments share the same loop and audit: *clamp inputs (free phase) → relax to equilibrium →
+clamp inputs+outputs (nudged phase) → relax → update each weight from the LOCAL difference between the
+two relaxed states → score.* The constitutive law is pluggable; the learning rule and the verdict are
+shared. (The canonical extraction of this as a standalone `00-shared-harness` is deferred to the
+portfolio-wide reconciliation.)
 
 ## Structure
+
+**Experiment A (resistor):**
 
 | File | Responsibility |
 |---|---|
 | `solver.py` | Batched Newton/Laplacian equilibrium solve + the `relax` seam |
-| `network.py` | Constitutive laws (resistor, Hagen–Poiseuille), `Network`, builders |
-| `coupled_learning.py` | The two-phase coupled-learning rule (the heart) |
-| `tasks.py` | Allostery + regression tasks, error metric, verdict |
-| `baselines.py` | Offline adjoint-gradient baseline + gradient-alignment stats |
+| `network.py` | Constitutive laws (resistor, Hagen–Poiseuille), `Network`, grid builder |
+| `coupled_learning.py` | The two-phase coupled-learning rule (scalar/voltage) |
+| `experiment_a.py` | Driver: train, compare to baseline, emit verdict + JSON |
+
+**Experiment B (elastic):**
+
+| File | Responsibility |
+|---|---|
+| `spring_network.py` | 2D spring energy/force/tangent-stiffness (smoothed tension–compression asymmetry) + triangulated builder |
+| `mechanical_solver.py` | Damped-Newton energy minimization + line-search guard + basin-jump detection |
+| `mechanical_learning.py` | The two-phase mechanical rule (learns stiffness `k` and rest length `ℓ`) |
+| `experiment_b.py` | Crash-tolerant driver: train, baseline, five-way verdict + JSON |
+
+**Shared:**
+
+| File | Responsibility |
+|---|---|
+| `tasks.py` | A: allostery/regression + verdict. B: parity-3 task, two-sided separation, `verdict_b` |
+| `baselines.py` | Offline adjoint-gradient baselines (linear A; implicit-function-theorem B) + gradient-alignment |
 | `audit.py` | The "who computes the update?" provenance hook |
-| `experiment_a.py` | Driver: train, compare, emit verdict + JSON |
-| `docs/superpowers/` | Design spec and implementation plan |
+| `docs/superpowers/` | Design specs, implementation plans, and findings |
 
 ## Running
 
 ```bash
 pip install -r requirements.txt
-python -m pytest -q          # the test suite
-python experiment_a.py       # reproduce the headline verdict (prints a table + writes JSON)
+python -m pytest -q          # the full test suite (one module per source module)
+python experiment_a.py       # Experiment A: prints a table + writes experiment_a_results.json
+python experiment_b.py       # Experiment B: prints a per-seed table + writes experiment_b_results.json
 ```
 
-**Stack:** Python, numpy, scipy, pytest. The true gradient is a hand-written adjoint (no deep-learning
-framework), cross-checked against finite differences.
+**Stack:** Python, numpy, pytest (scipy is a declared dependency, currently unused). The true gradients
+are hand-written adjoints (no deep-learning framework), each cross-checked against finite differences.
 
 ## Method discipline
 
 Compute/simulation first; foreclosure is a valid, cheap outcome; observation is kept separate from
 interpretation; the offline-optimizer baseline is reported every time; pass/fail criteria are
-pre-registered. See `docs/superpowers/specs/` for the design and `docs/superpowers/plans/` for the plan.
+pre-registered; the smoke test asserts a *valid* verdict, never a specific one. Per experiment, the
+`docs/superpowers/specs/` folder holds the design spec and findings; `docs/superpowers/plans/` holds the
+implementation plan.
 
 ## References
 
 - Stern, Hexner, Rocks, Liu — *PRX* 11, 021045 (2021), "Supervised learning in physical networks."
 - Dillavou, Stern, Liu, Durian — *Phys. Rev. Applied* 18, 014040 (2022), "Demonstration of
   decentralized, physics-driven learning."
+- Rocks, Pashine, Bischofberger, Goodrich, Liu, Nagel — *PNAS* 114 (2017), allosteric/mechanical network
+  tuning (background for Experiment B).
 - Stern & Murugan — *Annu. Rev. Condens. Matter Phys.* 14 (2023), "Learning without neurons."
 - Scellier & Bengio (2017), "Equilibrium propagation."
