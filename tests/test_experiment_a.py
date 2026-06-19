@@ -10,3 +10,4 @@ def test_run_smoke_passes_and_is_physics_local():
         assert res[name]["verdict"]["status"] in ("PASS", "AMBIGUOUS", "FORECLOSE")
     # on these friendly tasks we expect the thesis to hold
     assert res["regression"]["verdict"]["status"] == "PASS"
+    assert res["audit"]["fraction_physics_local"] == 1.0

@@ -26,7 +26,7 @@ def _one_task(task, cfg):
     g = RESISTOR.g_of_p(local["params"])
     Vf = free_phase(net, g, task.inputs)
     Vn = nudged_phase(net, g, task.inputs, task.targets, cfg["beta"], free_out=Vf[:, net.outputs])
-    dp = local_update(net, g, RESISTOR, Vf, Vn, cfg["beta"], eta=1.0)
+    dp = local_update(net, g, RESISTOR, Vf, Vn, cfg["beta"], eta=1.0)  # eta is arbitrary here: gradient_alignment compares direction (sign/rho), scale-invariant
     align = gradient_alignment(dp, -adjoint_gradient(net, g, task))
 
     v = verdict(local["final_error"], base["final_error"], align["sign_match"], align["rho"])
@@ -37,18 +37,25 @@ def _one_task(task, cfg):
 
 def run(config=None):
     cfg = dict(DEFAULT_CONFIG)
-    if config:
+    if config is not None:
         cfg.update(config)
     out = {}
     out["allostery"] = _one_task(allostery_task(), cfg)
     out["regression"] = _one_task(regression_task(), cfg)
+    out["audit"] = {
+        "fraction_physics_local": min(
+            out["allostery"]["audit_fraction_physics_local"],
+            out["regression"]["audit_fraction_physics_local"],
+        ),
+    }
     return out
 
 
 def main():
     res = run()
     print(f"{'task':<12}{'local_err':>12}{'base_err':>12}{'sign':>8}{'rho':>8}{'verdict':>12}")
-    for name, r in res.items():
+    for name in ("allostery", "regression"):
+        r = res[name]
         print(f"{name:<12}{r['local_error']:>12.4e}{r['baseline_error']:>12.4e}"
               f"{r['sign_match']:>8.2f}{r['rho']:>8.3f}{r['verdict']['status']:>12}")
     with open("experiment_a_results.json", "w") as f:
