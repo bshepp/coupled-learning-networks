@@ -24,6 +24,13 @@ def test_two_sided_separation():
     assert two_sided_separation(np.array([0.0, 2.0, 1.0, 3.0]), y) < 0                     # overlap
 
 
+def test_two_sided_separation_single_class():
+    import numpy as np
+    from tasks import two_sided_separation
+    assert two_sided_separation(np.array([0.3, 0.4]), np.array([1, 1])) == float("-inf")
+    assert two_sided_separation(np.array([0.3, 0.4]), np.array([-1, -1])) == float("-inf")
+
+
 def test_verdict_b_branches():
     # multistability gate fires first regardless of separation
     assert verdict_b(1.0, 1.0, 0.1, jump_rate=0.5, sign_match=1.0, rho=1.0)["status"] == "MULTISTABILITY-FORECLOSE"

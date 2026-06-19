@@ -85,6 +85,8 @@ def two_sided_separation(r, y):
     the classes; <=0 iff they overlap. (Ported idiom from self-assembly/stage1_network.py.)"""
     r = np.asarray(r, float); y = np.asarray(y)
     pos, neg = r[y > 0], r[y < 0]
+    if pos.size == 0 or neg.size == 0:
+        return float("-inf")   # only one class present: two-sided separation is undefined
     return float(max(np.min(pos) - np.max(neg), np.min(neg) - np.max(pos)))
 
 

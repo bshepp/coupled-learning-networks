@@ -28,32 +28,17 @@ def test_nudge_moves_readout_toward_target():
 
 
 def test_training_moves_readout_toward_target_and_is_physics_local():
-    import mechanical_learning as _ml_mod
-    import tasks as _tasks_mod
-    # train_mech calls two_sided_separation which crashes on single-class labels (no neg samples).
-    # Patch its reference in the mechanical_learning module namespace for the duration of this test.
-    _orig_sep = _ml_mod.two_sided_separation
-    def _safe_sep(r, y):
-        r_arr = np.asarray(r, float); y_arr = np.asarray(y)
-        pos, neg = r_arr[y_arr > 0], r_arr[y_arr < 0]
-        if len(pos) == 0 or len(neg) == 0:
-            return 0.0
-        return _orig_sep(r, y)
-    _ml_mod.two_sided_separation = _safe_sep
-    try:
-        net, k0, l0 = _small_task()
-        pattern = np.array([1.0, -1.0, 1.0])
-        r0 = readout(net, free_phase_mech(net, k0, l0, pattern, d=0.3)[0])
-        target = r0 + 0.05                         # ask the network to shift its response
-        task = {"net": net, "patterns": np.array([pattern]), "labels": np.array([1.0]),
-                "d": 0.3, "target_pos": target, "target_neg": -target}
-        audit = AuditLog()
-        # eta_k/eta_l=0.1: the prescribed 2.0 destabilises the solver at epoch 4 with a single
-        # pattern (no multi-pattern gradient averaging to damp the update); 0.1 is stable and
-        # still clearly exercises the learning rule.
-        res = train_mech(task, k0, l0, beta=0.05, eta_k=0.1, eta_l=0.1, epochs=300, audit=audit)
-        r_final = res["readouts"][0]
-        assert abs(r_final - target) < abs(r0 - target)    # readout moved toward the target
-        assert audit.assert_physics_local() is True
-    finally:
-        _ml_mod.two_sided_separation = _orig_sep
+    net, k0, l0 = _small_task()
+    pattern = np.array([1.0, -1.0, 1.0])
+    r0 = readout(net, free_phase_mech(net, k0, l0, pattern, d=0.3)[0])
+    target = r0 + 0.05                         # ask the network to shift its response
+    task = {"net": net, "patterns": np.array([pattern]), "labels": np.array([1.0]),
+            "d": 0.3, "target_pos": target, "target_neg": -target}
+    audit = AuditLog()
+    # eta_k/eta_l=0.1: the prescribed 2.0 destabilises the solver at epoch 4 with a single
+    # pattern (no multi-pattern gradient averaging to damp the update); 0.1 is stable and
+    # still clearly exercises the learning rule.
+    res = train_mech(task, k0, l0, beta=0.05, eta_k=0.1, eta_l=0.1, epochs=300, audit=audit)
+    r_final = res["readouts"][0]
+    assert abs(r_final - target) < abs(r0 - target)    # readout moved toward the target
+    assert audit.assert_physics_local() is True
