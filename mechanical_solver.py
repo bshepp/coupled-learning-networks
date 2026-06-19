@@ -33,6 +33,9 @@ def relax_mech(net, k, l, clamp, x_init=None, max_iter=100, tol=1e-9):
             if energy(net, xt.reshape(n, 2), k, l) < E0:
                 break
             s *= 0.5
+        else:
+            raise RuntimeError("relax_mech line search failed to find a descent step "
+                               "(indefinite tangent stiffness / saddle?)")
         xf[free] += s * step
         x = xf.reshape(n, 2)
     raise RuntimeError(f"relax_mech did not converge in {max_iter} iters "
