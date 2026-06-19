@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Experiment scratch outputs
+*_results.json
+*_results.jsonl
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
