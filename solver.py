@@ -31,7 +31,10 @@ def assemble_laplacian(edges, V, weight_fn):
 
 def solve_batched(edges, node_volts, floating, phi=_ones, dphi=_zeros, max_iter=60, tol=1e-11):
     """Node voltages by Newton on the Kirchhoff residual with the analytic dynamic-Laplacian
-    Jacobian, batched over all patterns. node_volts: (P, n) with np.nan at floating nodes."""
+    Jacobian, batched over all patterns. node_volts: (P, n); floating positions may be np.nan —
+    they are overwritten with 0.0 as the Newton warm-start guess. The warm start uses raw
+    conductances (phi ignored): exact for the linear case, an approximate initial guess for
+    nonlinear phi."""
     V = np.array(node_volts, float)
     P, n = V.shape
     fset = set(int(i) for i in floating)
