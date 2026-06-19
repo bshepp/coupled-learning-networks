@@ -52,7 +52,7 @@ def run(config=None):
                               "baseline_sep": base["sep"],
                               "jump_rate": local["jump_rate"],
                               "sign_match": align["sign_match"], "rho": align["rho"]})
-        except Exception as e:
+        except RuntimeError as e:
             # Hard failure on one seed: record instability and continue with other seeds
             seeds_out.append({"seed": seed,
                               "local_sep": float("-inf"),
@@ -74,7 +74,7 @@ def run(config=None):
 
 def main():
     res = run()
-    print(f"{'seed':>5}{'local_sep':>12}{'base_sep':>12}{'jumps':>8}{'sign':>7}{'rho':>7}")
+    print(f"{'seed':>5}{'local_sep':>12}{'base_sep':>12}{'jump_rate':>8}{'sign':>7}{'rho':>7}")
     for s in res["seeds"]:
         print(f"{s['seed']:>5}{s['local_sep']:>12.4e}{s['baseline_sep']:>12.4e}"
               f"{s['jump_rate']:>8.2f}{s['sign_match']:>7.2f}{s['rho']:>7.3f}")
