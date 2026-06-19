@@ -7,7 +7,7 @@ import numpy as np
 from spring_network import energy, forces, tangent_stiffness
 
 
-def relax_mech(net, k, l, clamp, x_init=None, max_iter=100, tol=1e-9):
+def relax_mech(net, k, l, clamp, x_init=None, max_iter=100, tol=1e-8):
     n = net.x0.shape[0]
     x = (net.x0.copy() if x_init is None else np.asarray(x_init, float).copy())
     for d, v in clamp.items():

@@ -33,12 +33,7 @@ def nudged_phase_mech(net, k, l, pattern, d, target, beta, x_free):
     clamp = _input_clamp(net, pattern, d)
     node, dim = divmod(net.output_dof, 2)
     clamp[net.output_dof] = net.x0[node, dim] + (r_free + beta * (target - r_free))
-    try:
-        x, info = relax_mech(net, k, l, clamp, x_init=x_free)
-    except RuntimeError:
-        # Warm-start can fail when x_free is already near convergence for the nudged clamp
-        # (line-search precision floor). Fall back to cold-start from reference geometry.
-        x, info = relax_mech(net, k, l, clamp, x_init=net.x0)
+    x, info = relax_mech(net, k, l, clamp, x_init=x_free)
     return x, info, r_free
 
 
