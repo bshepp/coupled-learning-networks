@@ -43,3 +43,4 @@ def test_gradient_alignment_extremes():
     opp = gradient_alignment(v, -v)
     assert opp["sign_match"] == pytest.approx(0.0)
     assert opp["cosine"] == pytest.approx(-1.0)
+    assert opp["rho"] == pytest.approx(-1.0)

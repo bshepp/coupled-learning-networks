@@ -4,8 +4,7 @@ method (validated against finite differences) and gradient descent on it. Plus t
 gradient-alignment statistics that test whether the local rule tracks the true gradient.
 Loss L = 0.5 * mean_patterns( sum_outputs (V_o - t_o)^2 )."""
 import numpy as np
-from network import conductance_edges
-from coupled_learning import free_phase, edge_drops
+from coupled_learning import free_phase
 
 
 def _full_laplacian(net, g):
