@@ -51,3 +51,34 @@ def test_forces_match_negative_energy_gradient(alpha):
             xm = x.copy(); xm[i, d] -= eps
             fd[i, d] = -(energy(net, xp, k, l) - energy(net, xm, k, l)) / (2 * eps)
     assert F == pytest.approx(fd, abs=1e-5)
+
+
+def test_tangent_stiffness_matches_fd():
+    from spring_network import tangent_stiffness
+    net = _net(alpha=0.5)
+    rng = np.random.default_rng(1)
+    x = net.x0 + 0.1 * rng.standard_normal(net.x0.shape)
+    k = np.array([1.0, 1.2, 0.7]); l = np.array([0.9, 1.0, 1.05])
+    H = tangent_stiffness(net, x, k, l)
+    n = x.shape[0]; eps = 1e-6
+    fd = np.zeros((2 * n, 2 * n))
+    g = lambda xx: -forces(net, xx, k, l).reshape(-1)   # gradient of E
+    for b in range(2 * n):
+        xp = x.reshape(-1).copy(); xp[b] += eps
+        xm = x.reshape(-1).copy(); xm[b] -= eps
+        fd[:, b] = (g(xp.reshape(n, 2)) - g(xm.reshape(n, 2))) / (2 * eps)
+    assert H == pytest.approx(fd, abs=1e-4)
+    assert H == pytest.approx(H.T, abs=1e-9)          # symmetric
+
+
+def test_triangulated_lattice_is_rigid():
+    from spring_network import triangulated_lattice, tangent_stiffness, default_rest_lengths
+    x0, edges = triangulated_lattice(3, 3)
+    assert x0.shape == (9, 2)
+    net = SpringNetwork(x0, edges, pinned_dofs=[0, 1, dof(2, 1)],   # pin a corner fully + one DOF
+                        input_dofs=[], output_dof=0)
+    k = np.ones(len(edges)); l = default_rest_lengths(net)
+    H = tangent_stiffness(net, x0, k, l)
+    free = [d for d in range(2 * 9) if d not in {0, 1, dof(2, 1)}]
+    Hff = H[np.ix_(free, free)]
+    assert np.linalg.matrix_rank(Hff) == len(free)    # non-singular -> rigid

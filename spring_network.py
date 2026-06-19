@@ -69,3 +69,40 @@ def forces(net, x, k, l):
         T = 0.5 * k[b] * float(dm(e, net.alpha, net.w)) * e * e + k[b] * float(m(e, net.alpha, net.w)) * e
         F[i] -= T * dh; F[j] += T * dh
     return F
+
+
+def tangent_stiffness(net, x, k, l):
+    """Hessian d^2 E / dx^2, shape (2N, 2N). Per bond: material term kt*(dh dh^T) plus geometric
+    term (T/L)*(I - dh dh^T), assembled as [[K,-K],[-K,K]] over the bond's two nodes.
+    kt = d^2 E/dL^2 = 0.5*k*(m''(e)*e^2 + 4*m'(e)*e + 2*m(e));  T = dE/dL."""
+    x = np.asarray(x, float)
+    n = x.shape[0]
+    H = np.zeros((2 * n, 2 * n))
+    I2 = np.eye(2)
+    for b, (i, j) in enumerate(net.edges):
+        d = x[i] - x[j]; L = np.linalg.norm(d); dh = d / L; e = L - l[b]
+        me = float(m(e, net.alpha, net.w)); m1 = float(dm(e, net.alpha, net.w)); m2 = float(d2m(e, net.alpha, net.w))
+        T = 0.5 * k[b] * m1 * e * e + k[b] * me * e
+        kt = 0.5 * k[b] * (m2 * e * e + 4.0 * m1 * e + 2.0 * me)
+        P = np.outer(dh, dh)
+        K = kt * P + (T / L) * (I2 - P)
+        for (a, sa) in ((i, +1), (j, -1)):
+            for (c, sc) in ((i, +1), (j, -1)):
+                H[2 * a:2 * a + 2, 2 * c:2 * c + 2] += (sa * sc) * K
+    return H
+
+
+def triangulated_lattice(rows, cols, spacing=1.0):
+    """Rectangular grid of nodes with horizontal, vertical, and one diagonal per cell -> rigid."""
+    idx = lambda r, c: r * cols + c
+    x0 = np.array([[c * spacing, r * spacing] for r in range(rows) for c in range(cols)], float)
+    edges = []
+    for r in range(rows):
+        for c in range(cols):
+            if c + 1 < cols:
+                edges.append((idx(r, c), idx(r, c + 1)))
+            if r + 1 < rows:
+                edges.append((idx(r, c), idx(r + 1, c)))
+            if r + 1 < rows and c + 1 < cols:
+                edges.append((idx(r, c), idx(r + 1, c + 1)))
+    return x0, edges
