@@ -5,7 +5,6 @@ m(e) is a smooth tension-compression multiplier (m==1 when alpha==1). The geomet
 nonlinearity (through L and the rotating bond direction) is what makes the response non-monotone."""
 import numpy as np
 from dataclasses import dataclass
-from typing import List
 
 
 def m(e, alpha, w):
@@ -28,9 +27,9 @@ def d2m(e, alpha, w):
 @dataclass
 class SpringNetwork:
     x0: np.ndarray              # (N, 2) reference positions
-    edges: List[tuple]          # list of (i, j)
-    pinned_dofs: List[int]      # flat DOF indices held at x0
-    input_dofs: List[int]       # flat DOF indices driven by inputs
+    edges: list                  # list of (i, j)
+    pinned_dofs: list            # flat DOF indices held at x0
+    input_dofs: list             # flat DOF indices driven by inputs
     output_dof: int             # flat DOF index of the scalar readout
     alpha: float = 1.0
     w: float = 0.2

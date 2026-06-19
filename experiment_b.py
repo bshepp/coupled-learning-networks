@@ -42,7 +42,9 @@ def run(config=None):
         try:
             task = parity3_mech_task(cfg["rows"], cfg["cols"], d=cfg["d"], seed=seed)
             net = task["net"]
-            k0 = np.ones(len(net.edges)); l0 = default_rest_lengths(net)
+            rng = np.random.default_rng(seed)
+            k0 = rng.uniform(0.5, 2.0, len(net.edges))
+            l0 = default_rest_lengths(net) * rng.uniform(0.9, 1.1, len(net.edges))
             local = train_mech(task, k0, l0, cfg["beta"], cfg["eta_k"], cfg["eta_l"],
                                cfg["epochs"], audit=audit)
             base = gd_baseline_mech(task, k0, l0, cfg["baseline_epochs"], cfg["lr"])

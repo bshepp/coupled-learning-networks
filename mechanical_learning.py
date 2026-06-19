@@ -58,7 +58,7 @@ def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
     k = np.array(k0, float); l = np.array(l0, float)
     sep_history = []
     jumps = 0; trials = 0
-    readouts = None
+    readouts = np.zeros(len(patterns))
     for _ in range(epochs):
         dk = np.zeros_like(k); dl = np.zeros_like(l)
         readouts = np.zeros(len(patterns))
