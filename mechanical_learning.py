@@ -63,13 +63,17 @@ def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
         dk = np.zeros_like(k); dl = np.zeros_like(l)
         readouts = np.zeros(len(patterns))
         for p in range(len(patterns)):
-            xf, _ = free_phase_mech(net, k, l, patterns[p], d)
-            readouts[p] = readout(net, xf)
-            xn, _, r_free = nudged_phase_mech(net, k, l, patterns[p], d, targets[p], beta, xf)
-            jumped, _ = basin_jump(xf, xn, expected=abs(beta * (targets[p] - r_free)) + 1e-12)
-            jumps += int(jumped); trials += 1
-            ddk, ddl = local_update_mech(net, k, l, xf, xn, beta, eta_k, eta_l, audit=audit)
-            dk += ddk; dl += ddl
+            try:
+                xf, _ = free_phase_mech(net, k, l, patterns[p], d)
+                readouts[p] = readout(net, xf)
+                xn, _, r_free = nudged_phase_mech(net, k, l, patterns[p], d, targets[p], beta, xf)
+                jumped, _ = basin_jump(xf, xn, expected=abs(beta * (targets[p] - r_free)) + 1e-12)
+                jumps += int(jumped); trials += 1
+                ddk, ddl = local_update_mech(net, k, l, xf, xn, beta, eta_k, eta_l, audit=audit)
+                dk += ddk; dl += ddl
+            except RuntimeError:
+                # Solver failure = instability event; count it and skip this pattern's update
+                jumps += 1; trials += 1
         k = np.clip(k + dk / len(patterns), k_min, k_max)
         l = np.clip(l + dl / len(patterns), l_min, l_max)
         sep_history.append(two_sided_separation(readouts, labels))

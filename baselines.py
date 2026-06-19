@@ -124,11 +124,21 @@ def gd_baseline_mech(task, k0, l0, epochs, lr, k_min=1e-2, k_max=1e2, l_min=0.1,
     k = np.array(k0, float); l = np.array(l0, float)
     readouts = None
     for _ in range(epochs):
-        gk, gl = mech_adjoint_gradient(net, k, l, patterns, d, targets)
-        k = np.clip(k - lr * gk, k_min, k_max)
-        l = np.clip(l - lr * gl, l_min, l_max)
-        if audit is not None:
-            audit.record(OFFLINE_GRADIENT, 2 * len(net.edges))
-    readouts = np.array([readout(net, free_phase_mech(net, k, l, patterns[p], d)[0])
-                         for p in range(len(patterns))])
-    return {"k": k, "l": l, "sep": two_sided_separation(readouts, labels), "readouts": readouts}
+        try:
+            gk, gl = mech_adjoint_gradient(net, k, l, patterns, d, targets)
+            k = np.clip(k - lr * gk, k_min, k_max)
+            l = np.clip(l - lr * gl, l_min, l_max)
+            if audit is not None:
+                audit.record(OFFLINE_GRADIENT, 2 * len(net.edges))
+        except RuntimeError:
+            # Solver failure during gradient computation; skip this epoch's step
+            continue
+    try:
+        readouts = np.array([readout(net, free_phase_mech(net, k, l, patterns[p], d)[0])
+                             for p in range(len(patterns))])
+        sep = two_sided_separation(readouts, labels)
+    except RuntimeError:
+        # Any pattern's final solve fails → baseline could not be evaluated (instability)
+        readouts = np.zeros(len(patterns))
+        sep = float("-inf")
+    return {"k": k, "l": l, "sep": sep, "readouts": readouts}
