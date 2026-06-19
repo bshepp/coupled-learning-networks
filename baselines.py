@@ -76,7 +76,7 @@ def gradient_alignment(delta_local, neg_grad):
 
 
 # --- Experiment B: implicit-adjoint gradient through the nonlinear equilibrium ---------------
-from spring_network import tangent_stiffness, bond_extensions, m as _mB, dm as _dmB, d2m as _d2mB
+from spring_network import tangent_stiffness, m as _mB, dm as _dmB, d2m as _d2mB
 
 
 def mech_adjoint_gradient(net, k, l, patterns, d, targets):
@@ -86,7 +86,6 @@ def mech_adjoint_gradient(net, k, l, patterns, d, targets):
     from mechanical_learning import free_phase_mech, readout, _input_clamp
     n = net.x0.shape[0]
     gk = np.zeros(len(net.edges)); gl = np.zeros(len(net.edges))
-    onode, odim = divmod(net.output_dof, 2)
     P = len(patterns)
     for p in range(P):
         x, _ = free_phase_mech(net, k, l, patterns[p], d)

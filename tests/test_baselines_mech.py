@@ -51,4 +51,4 @@ def test_gd_baseline_reduces_loss():
     task = {"net": net, "patterns": patterns, "labels": labels, "d": 0.3,
             "target_pos": 0.1, "target_neg": -0.1}
     res = gd_baseline_mech(task, k0, l0, epochs=120, lr=1.0)
-    assert res["sep"] > -0.1          # baseline drives the readouts apart (or at least not worse)
+    assert res["sep"] > 0.05      # the offline optimizer genuinely separates the two classes
