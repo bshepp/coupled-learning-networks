@@ -36,3 +36,10 @@ def test_conductance_edges_shapes():
     assert len(ce) == len(net.edges)
     a, b, w = ce[0]
     assert (a, b) == net.edges[0] and w == pytest.approx(0.7)
+
+
+def test_grid_network_rejects_too_many_io():
+    with pytest.raises(ValueError):
+        grid_network(2, 2, n_in=3)
+    with pytest.raises(ValueError):
+        grid_network(2, 2, n_out=3)

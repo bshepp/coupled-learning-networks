@@ -3,7 +3,7 @@ a Network dataclass, and builders. The trainable per-edge parameter p maps to a
 conductance g via the constitutive law (resistor: g=p; Poiseuille: g=C*p**4)."""
 import numpy as np
 from dataclasses import dataclass
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,7 @@ def poiseuille_law(C=1.0):
 @dataclass
 class Network:
     n_nodes: int
-    edges: List[tuple]            # list of (a, b)
+    edges: List[Tuple[int, int]]            # list of (a, b)
     inputs: List[int]
     outputs: List[int]
     ground: Optional[int] = None
@@ -41,6 +41,8 @@ class Network:
 def grid_network(rows, cols, n_in=1, n_out=1):
     """2-D grid graph. Inputs = top n_in of the left column; outputs = bottom n_out of the
     right column; ground = bottom-left node. Requires n_in <= rows, n_out <= rows."""
+    if n_in > rows or n_out > rows:
+        raise ValueError(f"n_in={n_in} and n_out={n_out} must not exceed rows={rows}")
     idx = lambda r, c: r * cols + c
     edges = []
     for r in range(rows):
