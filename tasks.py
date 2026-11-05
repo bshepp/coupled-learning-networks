@@ -110,3 +110,26 @@ def verdict_b(local_sep, baseline_sep, floor, jump_rate, sign_match, rho,
     else:
         out["status"] = "AMBIGUOUS"
     return out
+
+
+def verdict_b2(rows, k=3.0, fail_max=0.2, sat_tol=0.02):
+    """Pre-registered verdict for Experiment B2 (is B's representability FORECLOSE a budget/objective
+    artifact?). rows: one dict per deformation d with sep_min / sep_max (two-sided separation at the
+    offline optimum, min/max over seeds and optimizers), snr_min (sep_min / floor), fail_rate (fraction
+    of objective evaluations whose equilibrium solve failed = instability), saturation_gap (purity gain
+    over the last budget doubling; small = the optimizer budget is saturated).
+      REPRESENTABLE: some STABLE d (fail_rate <= fail_max) separates robustly (sep_min > 0, snr_min >= k)
+        -> B's representability foreclosure was an artifact; the learnability question reopens.
+      FORECLOSE-REPRESENTABILITY-CONFIRMED: every stable d has sep_max <= 0 with a saturated budget.
+      AMBIGUOUS: anything in between (marginal / single-seed / unstable-only positives, unsaturated budget,
+        or no stable regime probed at all)."""
+    stable = [r for r in rows if r["fail_rate"] <= fail_max]
+    out = {"n_rows": len(rows), "n_stable": len(stable)}
+    if any(r["sep_min"] > 0 and r["snr_min"] >= k for r in stable):
+        out["status"] = "REPRESENTABLE"
+    elif (stable and all(r["sep_max"] <= 0 and r["saturation_gap"] <= sat_tol for r in stable)
+          and all(r["sep_max"] <= 0 for r in rows)):
+        out["status"] = "FORECLOSE-REPRESENTABILITY-CONFIRMED"
+    else:
+        out["status"] = "AMBIGUOUS"
+    return out
