@@ -62,3 +62,29 @@ def spectrum_report(r, patterns):
     return {"linear": lin, "quadratic": quad, "parity": par,
             "parity_to_linear": par / lin if lin > 0 else float("inf"),
             "purity": parity_purity(r, patterns)}
+
+
+def parity_cosine(r, patterns):
+    """cos(angle) between the CENTERED readout and the parity vector y = s1 s2 s3:
+    a_123 / sqrt(sum_{j>=1} a_j^2) in [-1, 1]; purity = cosine^2. Unlike purity its gradient does not
+    vanish at a_123 = 0, so an optimizer can leave the untrained (parity-free) saddle."""
+    B = walsh_basis(patterns)
+    r = np.asarray(r, float)
+    rc = r - r.mean()
+    y = B[:, PARITY]
+    nrm = np.linalg.norm(rc)
+    return float(y @ rc / (np.linalg.norm(y) * nrm)) if nrm > 0 else 0.0
+
+
+def parity_cosine_grad(r, patterns):
+    """d(parity_cosine)/dr (P,). Centering is a projector that leaves y (already zero-mean) fixed."""
+    B = walsh_basis(patterns)
+    r = np.asarray(r, float)
+    rc = r - r.mean()
+    y = B[:, PARITY]
+    nrm = np.linalg.norm(rc)
+    if nrm == 0:
+        return np.zeros(len(r))
+    ny = np.linalg.norm(y)
+    g = y / (ny * nrm) - (y @ rc) * rc / (ny * nrm ** 3)
+    return g - g.mean()          # chain rule through the centering projector

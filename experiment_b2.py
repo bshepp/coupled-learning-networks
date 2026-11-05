@@ -5,8 +5,13 @@ B declared FORECLOSE-REPRESENTABILITY from an offline baseline that (i) minimize
 targets (+/-0.5 d) with (ii) plain gradient descent for (iii) a fixed 400-epoch budget. The commons lesson
 `foreclosure-can-be-a-budget-artifact` says such a foreclosure is only valid if the ceiling is
 budget-saturated and the objective does not presuppose a scale. B2 re-probes representability with:
-  * a SCALE-FREE objective -- the Walsh parity purity a_123^2 / sum_j a_j^2 (1 iff the readout IS parity
-    up to offset and scale), differentiated through the implicit adjoint;
+  * a SCALE-FREE objective -- the Walsh parity COSINE a_123 / sqrt(sum_j a_j^2) (its square is the parity
+    purity; 1 iff the readout IS parity up to offset and scale), differentiated through the implicit
+    adjoint. (Run 1 used the purity itself, whose gradient is proportional to a_123 and therefore
+    vanishes on the untrained, parity-free lattice: L-BFGS declared convergence at iteration 0. The
+    cosine has the same optimum and a non-degenerate gradient there.)
+  * a quadratic BARRIER back to the last solvable configuration when an equilibrium solve fails (a flat
+    penalty, as in run 1, aborts L-BFGS's line search), with restarts until the budget is spent;
   * a better-converged optimizer (L-BFGS-B on the adjoint) with a budget-saturation record, plus the
     original MSE objective under L-BFGS-B as a control, plus a gradient-free differential-evolution
     probe (optimizer class);
@@ -21,15 +26,16 @@ from spring_network import default_rest_lengths
 from tasks import parity3_mech_task, two_sided_separation, verdict_b2
 from mechanical_learning import free_phase_mech, readout
 from baselines import mech_readout_adjoint
-from parity_analysis import parity_purity, parity_purity_grad, spectrum_report
+from parity_analysis import parity_purity, parity_cosine, parity_cosine_grad, spectrum_report
 from audit import AuditLog, OFFLINE_GRADIENT
 
-DEFAULT_CONFIG = {"rows": 4, "cols": 4, "ds": [0.05, 0.10, 0.15, 0.20], "seeds": [0, 1, 2],
-                  "budgets": [50, 200, 800], "floor": 1e-3,
+DEFAULT_CONFIG = {"rows": 4, "cols": 4, "ds": [0.05, 0.10, 0.15, 0.20], "seeds": [0, 1, 2, 3, 4],
+                  "budgets": [50, 200, 800], "max_restarts": 8, "floor": 1e-3,
                   "k_bounds": (1e-2, 1e2), "l_bounds": (0.1, 5.0),
-                  "de": {"d": 0.15, "seed": 0, "maxiter": 30, "popsize": 6,
-                         "k_bounds": (0.1, 10.0), "l_rel_bounds": (0.6, 1.4)}}
-FAIL_LOSS = 2.0     # worse than any purity loss (<= 1) or reachable MSE; returned when a solve fails
+                  "de": {"ds": [0.10, 0.15], "seed": 0, "maxiter": 60, "popsize": 10,
+                         "k_bounds": (0.2, 5.0), "l_rel_bounds": (0.8, 1.2)}}
+BARRIER = 10.0      # quadratic barrier strength back to the last solvable configuration
+FAIL_LOSS = 2.0     # gradient-free probes: constant penalty for an unsolvable configuration
 
 
 class Probe:
@@ -42,6 +48,10 @@ class Probe:
         self.E = len(self.net.edges)
         self.audit = audit
         self.n_eval = 0; self.n_fail = 0
+        self.fail_history = []             # per-evaluation solve failure flags (wall diagnostics)
+        self.sign = 1.0                    # polarity of the parity channel to grow (fixed at init)
+        self.last_ok = None                # (theta, loss) of the most recent solvable evaluation
+        self.best = None                   # (loss, theta) of the best solvable evaluation
 
     def split(self, theta):
         return np.asarray(theta[:self.E], float), np.asarray(theta[self.E:], float)
@@ -51,28 +61,56 @@ class Probe:
         return xs, np.array([readout(self.net, x) for x in xs])
 
     def _loss_grad(self, theta, dloss_dr, loss_of_r):
+        theta = np.asarray(theta, float)
         k, l = self.split(theta)
         self.n_eval += 1
         try:
             xs, r = self.readouts(k, l)
             gk, gl = mech_readout_adjoint(self.net, k, l, self.S, self.d, dloss_dr(r), xs=xs)
         except RuntimeError:
-            self.n_fail += 1
-            return FAIL_LOSS, np.zeros_like(theta)
+            self.n_fail += 1; self.fail_history.append(True)
+            if self.last_ok is None:                       # even the init is unsolvable
+                return FAIL_LOSS, np.zeros_like(theta)
+            t_ok, L_ok = self.last_ok                       # smooth barrier pointing back to stability
+            dt = theta - t_ok
+            return L_ok + BARRIER * float(dt @ dt) + 1e-3, 2.0 * BARRIER * dt
+        self.fail_history.append(False)
         if self.audit is not None:
             self.audit.record(OFFLINE_GRADIENT, 2 * self.E)
-        return float(loss_of_r(r)), np.concatenate([gk, gl])
+        L = float(loss_of_r(r))
+        self.last_ok = (theta.copy(), L)
+        if self.best is None or L < self.best[0]:
+            self.best = (L, theta.copy())
+        return L, np.concatenate([gk, gl])
 
-    def purity_loss(self, theta):
-        return self._loss_grad(theta, lambda r: -parity_purity_grad(r, self.S),
-                               lambda r: 1.0 - parity_purity(r, self.S))
+    def wall_pinned(self, window=20):
+        """Fraction of the last `window` evaluations whose solve failed: > 0 means the optimizer ended
+        pressed against the buckling boundary (every further step toward the objective is unstable)."""
+        h = self.fail_history[-window:]
+        return float(np.mean(h)) if h else 0.0
+
+    def set_sign(self, theta):
+        """Fix the polarity: grow the parity channel in whichever direction the init already leans."""
+        try:
+            _, r = self.readouts(*self.split(theta))
+            c = parity_cosine(r, self.S)
+            self.sign = 1.0 if c >= 0 else -1.0
+        except RuntimeError:
+            self.sign = 1.0
+
+    def cosine_loss(self, theta):
+        """1 - sign * parity_cosine(r): scale-free, non-degenerate at the parity-free saddle."""
+        return self._loss_grad(theta, lambda r: -self.sign * parity_cosine_grad(r, self.S),
+                               lambda r: 1.0 - self.sign * parity_cosine(r, self.S))
 
     def mse_loss(self, theta):
         P = len(self.S)
         return self._loss_grad(theta, lambda r: (r - self.targets) / P,
                                lambda r: 0.5 * np.mean((r - self.targets) ** 2))
 
-    def purity_only(self, theta):
+    def cosine_only(self, theta):
+        """Gradient-free form for DE: 1 - |parity_cosine| (two-sided, like the separation)."""
+        theta = np.asarray(theta, float)
         k, l = self.split(theta)
         self.n_eval += 1
         try:
@@ -80,7 +118,10 @@ class Probe:
         except RuntimeError:
             self.n_fail += 1
             return FAIL_LOSS
-        return 1.0 - parity_purity(r, self.S)
+        L = 1.0 - abs(parity_cosine(r, self.S))
+        if self.best is None or L < self.best[0]:
+            self.best = (L, theta.copy())
+        return L
 
     def score(self, theta):
         """Verdict quantities at a configuration (None if its equilibria cannot be solved)."""
@@ -102,24 +143,45 @@ def _init(task, seed):
     return np.concatenate([k0, l0])
 
 
-def lbfgs_probe(probe, theta0, loss_fn, budgets, k_bounds, l_bounds):
-    """L-BFGS-B from theta0 for budgets[-1] iterations, recording the purity at each intermediate
-    budget (one deterministic run; its trajectory at iteration b equals an independent run of budget b)."""
+def lbfgs_probe(probe, theta0, loss_fn, budgets, k_bounds, l_bounds, max_restarts=8):
+    """L-BFGS-B from theta0 for up to budgets[-1] total iterations, restarting from the best solvable
+    point whenever the line search aborts (ABNORMAL), until genuine convergence or the budget is spent.
+    Records the purity (of the best point so far) at each checkpoint budget; if the optimizer converges
+    before a checkpoint, later checkpoints repeat the converged value (more budget cannot help)."""
     bounds = [k_bounds] * probe.E + [l_bounds] * probe.E
+    total = budgets[-1]
     trace = {}
     state = {"it": 0}
+
+    def best_purity():
+        sc = probe.score(probe.best[1]) if probe.best is not None else None
+        return sc["purity"] if sc else None
 
     def cb(xk):
         state["it"] += 1
         if state["it"] in budgets:
-            sc = probe.score(xk)
-            trace[state["it"]] = (sc["purity"] if sc else None)
+            trace[state["it"]] = best_purity()
 
-    res = minimize(loss_fn, theta0, jac=True, method="L-BFGS-B", bounds=bounds, callback=cb,
-                   options={"maxiter": budgets[-1], "maxfun": 4 * budgets[-1]})
-    sc = probe.score(res.x)
-    trace[budgets[-1]] = (sc["purity"] if sc else None)
-    return {"theta": res.x, "nit": int(res.nit), "message": str(res.message), "trace": trace,
+    x = np.asarray(theta0, float)
+    messages = []; converged = False; restarts = 0
+    while state["it"] < total and restarts <= max_restarts:
+        res = minimize(loss_fn, x, jac=True, method="L-BFGS-B", bounds=bounds, callback=cb,
+                       options={"maxiter": total - state["it"], "maxfun": 4 * (total - state["it"])})
+        messages.append(str(res.message))
+        if str(res.message).startswith("CONVERGENCE"):
+            converged = True
+            break
+        restarts += 1
+        if probe.best is None:
+            break                                   # never found a solvable point: nothing to restart from
+        x = probe.best[1].copy()
+    final = best_purity()
+    for b in budgets:
+        if b not in trace:
+            trace[b] = final                        # converged / stopped before this checkpoint
+    sc = probe.score(probe.best[1]) if probe.best is not None else None
+    return {"theta": (probe.best[1] if probe.best is not None else x), "nit": state["it"],
+            "converged": converged, "restarts": restarts, "messages": messages, "trace": trace,
             "score": sc}
 
 
@@ -128,11 +190,12 @@ def de_probe(probe, cfg_de, seed):
     l_def = default_rest_lengths(probe.net)
     bounds = [cfg_de["k_bounds"]] * probe.E + [(cfg_de["l_rel_bounds"][0] * ld, cfg_de["l_rel_bounds"][1] * ld)
                                                for ld in l_def]
-    res = differential_evolution(probe.purity_only, bounds, seed=seed, maxiter=cfg_de["maxiter"],
+    res = differential_evolution(probe.cosine_only, bounds, seed=seed, maxiter=cfg_de["maxiter"],
                                  popsize=cfg_de["popsize"], polish=False, tol=0.0)
     if probe.audit is not None:
         probe.audit.record(OFFLINE_GRADIENT, 2 * probe.E * int(res.nfev))
-    return {"theta": res.x, "nfev": int(res.nfev), "score": probe.score(res.x)}
+    theta = probe.best[1] if probe.best is not None else res.x
+    return {"theta": theta, "nfev": int(res.nfev), "score": probe.score(theta)}
 
 
 def untrained_spectrum(rows, cols, ds):
@@ -157,9 +220,16 @@ def _aggregate(d, cells, floor):
     sep_max = max(seps) if seps else float("-inf")
     n_eval = sum(c["n_eval"] for c in cells); n_fail = sum(c["n_fail"] for c in cells)
     gaps = [c["saturation_gap"] for c in cells if c.get("saturation_gap") is not None]
+    seeds = sorted({c["seed"] for c in cells if c["optimizer"] == "lbfgs"})
+    unstable = [s for s in seeds if all(c["score"] is None for c in cells
+                                        if c["seed"] == s and c["optimizer"] == "lbfgs")]
+    pinned = [c["wall_pinned"] for c in cells if c.get("wall_pinned") is not None and c["score"] is not None]
     return {"d": d, "sep_min": sep_min, "sep_max": sep_max, "snr_min": sep_min / floor,
             "purity_max": max([c["score"]["purity"] for c in cells if c["score"]] or [0.0]),
-            "fail_rate": n_fail / max(n_eval, 1),
+            "parity_coef_max": max([c["score"]["parity"] for c in cells if c["score"]] or [0.0]),
+            "wall_pinned_frac": float(np.mean([p > 0 for p in pinned])) if pinned else 0.0,
+            "unstable_frac": len(unstable) / max(len(seeds), 1), "unstable_seeds": unstable,
+            "eval_fail_rate": n_fail / max(n_eval, 1),
             "saturation_gap": max(gaps) if gaps else float("inf"), "n_cells": len(cells)}
 
 
@@ -177,27 +247,31 @@ def run(config=None):
         for seed in cfg["seeds"]:
             task = parity3_mech_task(cfg["rows"], cfg["cols"], d=d, seed=seed)
             theta0 = _init(task, seed)
-            for objective in ("purity", "mse"):
+            for objective in ("cosine", "mse"):
                 probe = Probe(task, audit=audit)
-                loss = probe.purity_loss if objective == "purity" else probe.mse_loss
-                res = lbfgs_probe(probe, theta0, loss, budgets, tuple(cfg["k_bounds"]), tuple(cfg["l_bounds"]))
+                probe.set_sign(theta0)
+                loss = probe.cosine_loss if objective == "cosine" else probe.mse_loss
+                res = lbfgs_probe(probe, theta0, loss, budgets, tuple(cfg["k_bounds"]), tuple(cfg["l_bounds"]),
+                                  max_restarts=cfg["max_restarts"])
                 tr = res["trace"]
                 gap = None
                 if len(budgets) >= 2 and tr.get(budgets[-1]) is not None and tr.get(budgets[-2]) is not None:
                     gap = tr[budgets[-1]] - tr[budgets[-2]]
                 cells.append({"d": d, "seed": seed, "optimizer": "lbfgs", "objective": objective,
-                              "nit": res["nit"], "message": res["message"],
+                              "nit": res["nit"], "converged": res["converged"], "restarts": res["restarts"],
+                              "messages": res["messages"],
                               "purity_trace": {str(b): v for b, v in tr.items()},
                               "saturation_gap": gap, "n_eval": probe.n_eval, "n_fail": probe.n_fail,
-                              "score": res["score"]})
+                              "wall_pinned": probe.wall_pinned(), "score": res["score"]})
     if cfg.get("de"):
         de = cfg["de"]
-        task = parity3_mech_task(cfg["rows"], cfg["cols"], d=de["d"], seed=de["seed"])
-        probe = Probe(task, audit=audit)
-        res = de_probe(probe, de, de["seed"])
-        cells.append({"d": de["d"], "seed": de["seed"], "optimizer": "de", "objective": "purity",
-                      "nfev": res["nfev"], "saturation_gap": None,
-                      "n_eval": probe.n_eval, "n_fail": probe.n_fail, "score": res["score"]})
+        for d in de["ds"]:
+            task = parity3_mech_task(cfg["rows"], cfg["cols"], d=d, seed=de["seed"])
+            probe = Probe(task, audit=audit)
+            res = de_probe(probe, de, de["seed"])
+            cells.append({"d": d, "seed": de["seed"], "optimizer": "de", "objective": "cosine",
+                          "nfev": res["nfev"], "saturation_gap": None,
+                          "n_eval": probe.n_eval, "n_fail": probe.n_fail, "score": res["score"]})
     rows = [_aggregate(d, [c for c in cells if c["d"] == d], cfg["floor"]) for d in sorted({c["d"] for c in cells})]
     out["cells"] = cells
     out["rows"] = rows
@@ -219,19 +293,22 @@ def main():
         else:
             print(f"{s['d']:>6.2f}  UNSTABLE (buckled)")
     print("\noffline probes (per cell):")
-    print(f"{'d':>6}{'seed':>5}{'opt':>7}{'obj':>8}{'purity':>9}{'sep':>12}{'fail':>6}{'trace':>30}")
+    print(f"{'d':>6}{'seed':>5}{'opt':>7}{'obj':>8}{'purity':>9}{'sep':>12}{'fail':>6}{'nit':>5}{'cv':>3}  trace")
     for c in res["cells"]:
         sc = c["score"]
         pur = f"{sc['purity']:.4f}" if sc else "  n/a"
         sep = f"{sc['sep']:.4e}" if sc else "    n/a"
         tr = " ".join(f"{k}:{v:.3f}" if v is not None else f"{k}:n/a" for k, v in c.get("purity_trace", {}).items())
+        cv = {True: "y", False: "n"}.get(c.get("converged"), "-")
         print(f"{c['d']:>6.2f}{c['seed']:>5}{c['optimizer']:>7}{c['objective']:>8}{pur:>9}{sep:>12}"
-              f"{c['n_fail']/max(c['n_eval'],1):>6.2f}  {tr}")
+              f"{c['n_fail']/max(c['n_eval'],1):>6.2f}{c.get('nit', c.get('nfev', 0)):>5}{cv:>3}  {tr}")
     print("\nper-d aggregate:")
-    print(f"{'d':>6}{'sep_min':>12}{'sep_max':>12}{'purity_max':>11}{'fail_rate':>10}{'sat_gap':>9}")
+    print(f"{'d':>6}{'sep_min':>12}{'sep_max':>12}{'purity_max':>11}{'a123_max':>10}{'pinned':>8}{'unstable':>9}"
+          f"{'evalfail':>9}{'sat_gap':>9}")
     for r in res["rows"]:
         print(f"{r['d']:>6.2f}{r['sep_min']:>12.4e}{r['sep_max']:>12.4e}{r['purity_max']:>11.4f}"
-              f"{r['fail_rate']:>10.2f}{r['saturation_gap']:>9.3f}")
+              f"{r['parity_coef_max']:>10.3e}{r['wall_pinned_frac']:>8.2f}{r['unstable_frac']:>9.2f}"
+              f"{r['eval_fail_rate']:>9.2f}{r['saturation_gap']:>9.3f}")
     print(f"\nVERDICT: {res['verdict']['status']}  (offline-only audit: {res['audit']['all_offline']}, "
           f"{res['elapsed_s']:.0f}s)")
     with open("experiment_b2_results.json", "w") as f:

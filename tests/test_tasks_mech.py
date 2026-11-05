@@ -48,9 +48,9 @@ def test_verdict_b_branches():
 from tasks import verdict_b2
 
 
-def _row(d, sep_min, sep_max, fail_rate=0.0, sat=0.0, floor=1e-3):
+def _row(d, sep_min, sep_max, unstable=0.0, sat=0.0, floor=1e-3):
     return {"d": d, "sep_min": sep_min, "sep_max": sep_max, "snr_min": sep_min / floor,
-            "fail_rate": fail_rate, "saturation_gap": sat}
+            "unstable_frac": unstable, "saturation_gap": sat}
 
 
 def test_verdict_b2_representable_needs_a_robust_stable_positive():
@@ -58,7 +58,7 @@ def test_verdict_b2_representable_needs_a_robust_stable_positive():
     # positive only on the best seed -> not robust
     assert verdict_b2([_row(0.1, -0.01, 0.02)])["status"] == "AMBIGUOUS"
     # robust positive but only in the unstable regime
-    assert verdict_b2([_row(0.3, 0.01, 0.02, fail_rate=0.5)])["status"] == "AMBIGUOUS"
+    assert verdict_b2([_row(0.3, 0.01, 0.02, unstable=0.5)])["status"] == "AMBIGUOUS"
 
 
 def test_verdict_b2_confirmed_foreclose_requires_saturation_and_stability():
@@ -66,4 +66,4 @@ def test_verdict_b2_confirmed_foreclose_requires_saturation_and_stability():
     assert verdict_b2(rows)["status"] == "FORECLOSE-REPRESENTABILITY-CONFIRMED"
     rows_unsat = [_row(0.05, -0.1, -0.05, sat=0.1)]
     assert verdict_b2(rows_unsat)["status"] == "AMBIGUOUS"          # budget not saturated
-    assert verdict_b2([_row(0.3, -0.1, -0.05, fail_rate=0.9)])["status"] == "AMBIGUOUS"  # nothing stable
+    assert verdict_b2([_row(0.3, -0.1, -0.05, unstable=0.9)])["status"] == "AMBIGUOUS"  # nothing stable

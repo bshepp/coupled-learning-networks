@@ -46,3 +46,18 @@ def test_spectrum_report_fields():
     assert rep["parity"] == pytest.approx(0.1)
     assert rep["parity_to_linear"] == pytest.approx(0.1)
     assert 0.0 < rep["purity"] < 1.0
+
+
+def test_cosine_squared_is_purity_and_gradient_is_nonzero_at_the_parity_free_saddle():
+    from parity_analysis import parity_cosine, parity_cosine_grad, parity_purity_grad
+    S = _patterns()
+    rng = np.random.default_rng(2)
+    r = rng.standard_normal(8)
+    assert parity_cosine(r, S) ** 2 == pytest.approx(parity_purity(r, S))
+    eps = 1e-6
+    fd = np.array([(parity_cosine(r + eps * np.eye(8)[p], S) - parity_cosine(r - eps * np.eye(8)[p], S))
+                   / (2 * eps) for p in range(8)])
+    assert parity_cosine_grad(r, S) == pytest.approx(fd, abs=1e-6)
+    r0 = S[:, 0] + 0.3 * S[:, 1]                      # no parity content at all
+    assert np.linalg.norm(parity_purity_grad(r0, S)) == pytest.approx(0.0)   # purity is flat here ...
+    assert np.linalg.norm(parity_cosine_grad(r0, S)) > 0.1                   # ... the cosine is not
