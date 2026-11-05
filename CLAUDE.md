@@ -15,15 +15,18 @@ valid, valued result** — the goal is the truth, not a PASS. Read `README.md` a
 
 ```bash
 pip install -r requirements.txt
-python -m pytest -q                                   # full suite (~44 tests, one module per source module)
+python -m pytest -q                                   # full suite (~54 tests, one module per source module, ~12 s)
 python -m pytest tests/test_coupled_learning.py -q    # one module
 python -m pytest tests/test_coupled_learning.py::test_training_reduces_error   # one test
 python experiment_a.py        # Experiment A driver: prints table, writes experiment_a_results.json
-python experiment_b.py        # Experiment B driver: prints per-seed table, writes experiment_b_results.json
+python experiment_b.py        # Experiment B driver: prints per-seed table, writes experiment_b_results.json (~1 min)
+python experiment_b2.py       # Experiment B2: offline representability re-probe (scipy L-BFGS-B/DE), writes experiment_b2_results.json
 ```
 
-Stack: Python + numpy + pytest (scipy is declared but currently unused). No deep-learning framework — all
-"true" gradients are hand-written adjoints. `*_results.json` are gitignored scratch outputs.
+Stack: Python + numpy + scipy + pytest. No deep-learning framework — all "true" gradients are hand-written
+adjoints. `*_results.json` are gitignored scratch outputs. Spring kernels are vectorized over bonds
+(`edge_array`/`_bond_geometry` in `spring_network.py`) — keep new per-bond code vectorized; the FD gate
+tests are the safety net.
 
 ## Architecture
 
@@ -42,13 +45,17 @@ Two parallel module families, distinguished by the `_mech` / `mechanical_` / `sp
 | Two-phase local rule | `coupled_learning.py` | `mechanical_learning.py` |
 | Offline-gradient control | `baselines.py` (linear adjoint) | `baselines.py` (implicit-function-theorem adjoint) |
 | Driver + verdict emit | `experiment_a.py` | `experiment_b.py` |
+| Representability re-probe (offline only) | — | `experiment_b2.py` + `parity_analysis.py` (Walsh parity purity, `verdict_b2`) |
 
 Shared: `tasks.py` (task definitions, error/separation metrics, **`verdict()` and `verdict_b()`**) and
 `audit.py` (the provenance hook). `tasks.py` and `baselines.py` each hold both A and B sections in one file.
 
 ### The audit invariant — do not break it
 
-`audit.py` tags every weight change as `PHYSICS_LOCAL` or `OFFLINE_GRADIENT`. The headline training functions
+`audit.py` tags every weight change as `PHYSICS_LOCAL` or `OFFLINE_GRADIENT` (projected onto the commons'
+two axes, gradient source × write mechanism; `summary()["is_physical"]` is the both-axes gate).
+`experiment_b2.py` is **all** `OFFLINE_GRADIENT` by design — it is a representability probe, not a learning
+run; its test asserts `all_offline`. The headline training functions
 (`train`, `train_mech`) record `PHYSICS_LOCAL`; only the baseline controls (`gd_baseline`, `gd_baseline_mech`)
 record `OFFLINE_GRADIENT`. **The smoke tests assert `audit_fraction_physics_local == 1.0`** — if you route any
 offline gradient into the headline path, those tests fail *by design*, because that would falsify the thesis.
@@ -59,7 +66,9 @@ Keep the baseline's audit log separate from the headline run's.
 The local rule is only meaningful if it equals the true loss gradient as `β→0`. `baselines.py` computes the
 exact adjoint gradient (hand-written, **cross-checked against finite differences** in the tests — keep that
 check passing when touching `forces`/`tangent_stiffness`/`mech_adjoint_gradient`). `gradient_alignment()`
-reports `sign_match`/`rho`/`cosine`; the verdict requires high alignment for a PASS.
+reports `sign_match`/`rho`/`cosine`; the verdict requires high alignment for a PASS. **Measure alignment at
+init, not at convergence** (commons pattern `alignment-certification`: at a loss minimum both vectors → 0 and
+ρ is meaningless — Experiment B's seed 0 read ρ 0.000 at the end and 1.000 at init).
 
 ## Conventions and gotchas
 
@@ -75,6 +84,11 @@ reports `sign_match`/`rho`/`cosine`; the verdict requires high alignment for a P
   stiffness, failed line search) is a real physical event — buckling/multistability — and is *counted* as an
   instability (jump rate), not masked. Catches are deliberately narrowed to `RuntimeError` so genuine bugs
   still surface; keep them narrow.
+- **Offline ceilings must be budget-saturated and scale-free** before a FORECLOSE is recorded off them
+  (commons `foreclosure-can-be-a-budget-artifact`); B2 is the template (saturation trace + scale-free
+  objective + second optimizer class).
+- **Knife-edge solves near buckling are not bit-reproducible** across numpy builds (seed-1 baseline in B
+  flips −5.9e-02 ↔ −inf with summation order). Don't chase such flips as bugs; record them.
 - **Observation vs interpretation stay separate.** Per-experiment `docs/superpowers/specs/*-findings.md` files
   split "Observed" (numbers) from "Interpretation" (claims). Match that when recording results.
 
@@ -89,6 +103,9 @@ deferred to a portfolio-wide reconciliation. Sibling projects (`02`–`05`) run 
 `00` (`../00-shared-harness/`, repo `physical-learning-commons`) is the portfolio's shared **commons**:
 it harvests cross-project lessons and advertises what each project should adopt. It *reads* this repo but
 never writes to it — adoption is yours to apply (pull model).
+
+The commons may not be checked out beside this repo (it was not on 2026-11-05); it is public at
+`https://github.com/bshepp/physical-learning-commons` — clone it read-only to `../00-shared-harness` first.
 
 **At session start, read:**
 - `../00-shared-harness/BULLETIN.md` — what's newly available + the **Recommended adoptions** (find this
