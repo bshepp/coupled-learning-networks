@@ -103,9 +103,11 @@ means the claim was under-supported. **Experiment B2 (today) re-probes exactly t
 
 ## Roadmap (ranked)
 
-1. **B2 — representability re-probe (done today; see findings).** Scale-free Walsh-purity objective,
-   L-BFGS-B with saturation trace, MSE-under-L-BFGS control, DE optimizer-class check, untrained Walsh
-   spectrum vs d. Outcome recorded in `2026-11-05-experiment-b2-findings.md`.
+1. **B2 — representability re-probe (done today).** Outcome **FORECLOSE-REPRESENTABILITY-CONFIRMED**:
+   parity channel ∝ d³ vs linear ∝ d (crossover far beyond buckling); optimizing (k, ℓ) grows the parity
+   coefficient ×600 but every optimum is wall-pinned and 38/38 separations are negative. B's verdict
+   stands on a budget-saturated, scale-free, two-optimizer probe. See
+   `2026-11-05-experiment-b2-findings.md`.
 2. **Two-axis audit adoption.** Port `commons/audit.py`'s `Audit` (keep `AuditLog` as the shim so the
    smoke tests' `fraction_physics_local == 1.0` invariant is untouched), and tag headline updates
    `(physical, physical)`, baselines `(cpu, electronic)`. Small, mechanical, closes the open RECONCILE.
@@ -114,7 +116,10 @@ means the claim was under-supported. **Experiment B2 (today) re-probes exactly t
    With kernels 10× faster, sweep (d, pre-stress) with a jump-rate map and ask whether *any* region is
    both stable and learnable for a friendlier mechanical task (allostery-in-elastic) — this separates
    "the rule breaks" from "parity is hard" on the elastic medium.
-4. **Experiment C — fast/slow two-timescale elastic medium (H4).** The commons' diagnosed next
+4. **Experiment C — fast/slow two-timescale elastic medium (H4).** *(B2 adds a second candidate C:
+   elements bistable by design, with a rule that tolerates multistability — since B2 shows the
+   parity-increasing direction IS the buckling direction, an escape on this medium must embrace
+   bistability rather than avoid it.)* The commons' diagnosed next
    build-direction for the compliant/directed-aging hardware route: a fast mode physically plays the
    free-phase reference each step, a slow mode is the aged weight. Simulate it on the spring network;
    pre-register PASS/FORECLOSE on allostery first (friendly), parity later. This is the most novel open

@@ -15,7 +15,7 @@ valid, valued result** — the goal is the truth, not a PASS. Read `README.md` a
 
 ```bash
 pip install -r requirements.txt
-python -m pytest -q                                   # full suite (~54 tests, one module per source module, ~12 s)
+python -m pytest -q                                   # full suite (~56 tests, one module per source module, ~14 s)
 python -m pytest tests/test_coupled_learning.py -q    # one module
 python -m pytest tests/test_coupled_learning.py::test_training_reduces_error   # one test
 python experiment_a.py        # Experiment A driver: prints table, writes experiment_a_results.json

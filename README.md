@@ -14,7 +14,7 @@ the co-located ionic computing line. It contains two experiments in two media.
 |---|---|---|---|
 | **A** | resistor / flow network (scalar potential) | allostery + regression | **PASS** — the physics computes the update |
 | **B** | 2D nonlinear spring network (signed displacements) | parity-3 | **FORECLOSE** — elastic state can't clear the wall |
-| **B2** (2026-11-05) | same lattice, offline representability re-probe | parity-3 | __B2_VERDICT__ |
+| **B2** (2026-11-05) | same lattice, offline representability re-probe | parity-3 | **FORECLOSE-REPRESENTABILITY-CONFIRMED** — B's foreclosure is not a budget/objective artifact |
 
 **Experiment A (PASS).** A passive resistor network, trained only by the local two-phase
 coupled-learning rule, reaches the offline optimizer's error on allostery and regression, and its
@@ -36,7 +36,10 @@ plain gradient descent and a fixed budget — the three ingredients the portfoli
 identified as able to manufacture a false foreclosure (`foreclosure-can-be-a-budget-artifact`). B2
 re-probes it with a scale-free objective (the Walsh **parity purity** of the readout), L-BFGS with a
 budget-saturation trace, a gradient-free optimizer, and the untrained lattice's Walsh spectrum vs
-deformation. __B2_SUMMARY__ See `docs/superpowers/specs/2026-11-05-experiment-b2-findings.md`; the
+deformation. Result: the parity channel grows as `d³` against a linear channel `∝ d` (crossover at
+d ≈ 1.1 lattice spacings vs buckling at ≈ 0.25); optimizing rest lengths and stiffnesses raises the
+parity coefficient several-hundred-fold, but every optimum is **pinned on the buckling boundary** and
+38/38 solvable optima have negative separation. See `docs/superpowers/specs/2026-11-05-experiment-b2-findings.md`; the
 restart evaluation and ranked roadmap are in `2026-11-05-project-status-and-roadmap.md`.
 
 **Why the keystones hold (commons lesson `gradient-flow-is-the-ep-license`).** Both substrates are genuine
@@ -90,7 +93,7 @@ pip install -r requirements.txt
 python -m pytest -q          # the full test suite (one module per source module)
 python experiment_a.py       # Experiment A: prints a table + writes experiment_a_results.json
 python experiment_b.py       # Experiment B: prints a per-seed table + writes experiment_b_results.json (~1 min)
-python experiment_b2.py      # Experiment B2: offline representability re-probe + Walsh spectrum (~__B2_MIN__ min)
+python experiment_b2.py      # Experiment B2: offline representability re-probe + Walsh spectrum (~28 min)
 ```
 
 **Stack:** Python, numpy, scipy (L-BFGS-B / differential evolution in B2), pytest. The true gradients
