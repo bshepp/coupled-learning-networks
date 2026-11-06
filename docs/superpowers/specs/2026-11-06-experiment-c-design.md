@@ -138,9 +138,13 @@ So the first blocker is exactly §5's: `relax_mech` is a Newton minimizer that *
 regions by design (B's crash-tolerance semantics), and Arm 1 needs a solver that **finds a minimum
 through a snap** — a damped Newton with Hessian modification (`H + μI` until positive definite, μ by
 Levenberg–Marquardt) or a trust-region step, kept as a *separate* entry point (`settle()`), so B's
-`relax_mech` guards stay untouched. Remaining first-step items: that solver; then rule 2's (symmetric
-nudge) alignment against the implicit adjoint on a 3×3 lattice with one snap cell, in-basin and across a
-snap. That single number (ρ across a snap) decides whether Arm 1 is worth a full plan.
+`relax_mech` guards stay untouched. **Done (same day): `mechanical_solver.settle()`** — LM-damped Newton
+with saddle escape, tested on the snap cell (lands in a well from near the saddle, escapes from exactly
+the saddle, agrees with Newton in-basin). With it the quasi-static driver sweep follows the snap in both
+directions: up-snap at driver y = 1.6, down-snap at y = 1.4 — a hysteresis loop of width 0.2 in the drive,
+apex jumping between ≈ ±0.3. Remaining first-step item: rule 2's (symmetric nudge) alignment against the
+implicit adjoint on a 3×3 lattice with one snap cell, in-basin and across a snap. That single number
+(ρ across a snap) decides whether Arm 1 is worth a full plan.
 
 ## 7. References
 
