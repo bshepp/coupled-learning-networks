@@ -115,8 +115,10 @@ Levenberg–Marquardt minimizer (`settle()`), counts rescues separately, and **m
 - **Experiment B0:** amplify MULTISTABILITY-FORECLOSE → **AMBIGUOUS** (2 PASS, 1 learns-but-misses-GD);
   "loss descent marches toward buckling" withdrawn; stability margin drifts 10–30 % over 6000 epochs.
 - **Read-noise sweep:** "tax paid as buckling" → drift; β-scaling of the wall now resolved (1e-3 → 1e-2).
-- **Experiment B2:** the untrained lattice is stable through d = 0.5 (not "buckled at 0.3"); its wall-pinned
-  diagnostic and the DE/L-BFGS eval-failure rates are re-run (addendum in the B2 findings).
+- **Experiment B2:** verdict unchanged (FORECLOSE-REPRESENTABILITY-CONFIRMED, 42/42 negative); eval-fail
+  rates 32–47 % → 0 %, "wall-pinned" 1.00 → 0–0.10 (withdrawn); purity reached 0.70 and a₁₂₃ 1.5 with
+  separation still negative — a representability wall, not an instability wall. Untrained lattice stable
+  through d = 0.5.
 - **Lesson candidate for the commons:** a crash-tolerant solver seam must distinguish "the solver failed from
   its start point" from "no stable equilibrium exists"; count only the latter as physics.
 

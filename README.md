@@ -36,16 +36,17 @@ FORECLOSE-REPRESENTABILITY. The *mechanism* is sound — the keystone confirms t
 gradient (ρ 1.0). → **The wall is deeper than passivity**; escalate to project `03` (energy-based/Ising).
 See `docs/superpowers/specs/2026-06-19-experiment-b-findings.md` (with its 2026-11-06 addendum).
 
-**Experiment B2 (re-probe, 2026-11-05).** B's representability leg rested on a fixed-scale MSE target,
-plain gradient descent and a fixed budget — the three ingredients the portfolio commons has since
-identified as able to manufacture a false foreclosure (`foreclosure-can-be-a-budget-artifact`). B2
-re-probes it with a scale-free objective (the Walsh **parity purity** of the readout), L-BFGS with a
-budget-saturation trace, a gradient-free optimizer, and the untrained lattice's Walsh spectrum vs
-deformation. Result: the parity channel grows as `d³` against a linear channel `∝ d` (crossover at
-d ≈ 1.1 lattice spacings vs buckling at ≈ 0.25); optimizing rest lengths and stiffnesses raises the
-parity coefficient several-hundred-fold, but every optimum is **pinned on the buckling boundary** and
-38/38 solvable optima have negative separation. See `docs/superpowers/specs/2026-11-05-experiment-b2-findings.md`; the
-restart evaluation and ranked roadmap are in `2026-11-05-project-status-and-roadmap.md`.
+**Experiment B2 (re-probe, 2026-11-05; re-run 2026-11-06).** B's representability leg rested on a fixed-scale
+MSE target, plain gradient descent and a fixed budget — the three ingredients the portfolio commons has since
+identified as able to manufacture a false foreclosure (`foreclosure-can-be-a-budget-artifact`). B2 re-probes
+it with a scale-free objective (the Walsh **parity purity** of the readout), L-BFGS with a budget-saturation
+trace, a gradient-free optimizer, and the untrained lattice's Walsh spectrum vs deformation. Result: the
+parity channel grows as `d³` against a linear channel `∝ d` for d ≤ 0.2; optimizing rest lengths and
+stiffnesses raises the parity coefficient to ~1.5 lattice units and the purity to 0.70, and **all 42 offline
+optima still have negative separation** — a representability wall, not an instability wall (the first run's
+"every optimum pinned on the buckling boundary" was the solver artifact and is withdrawn). See
+`docs/superpowers/specs/2026-11-05-experiment-b2-findings.md` (with addendum); the restart evaluation and
+ranked roadmap are in `2026-11-05-project-status-and-roadmap.md`.
 
 **Experiment B0 (2026-11-06).** The positive control B never ran: on *mechanical allostery* the local rule
 learns at network scale, 100 % physics-local — attenuation to ~1e-3 normalized error, amplification to

@@ -160,3 +160,55 @@ buckling threshold — e.g. elements that are bistable *by design* with a learni
 multistability, or a vector/multi-node readout — or a substrate whose non-monotonicity is intrinsic
 (`03`, discrete spins). Reusable for siblings: the **wall-pinned fraction** as a diagnostic that an
 offline ceiling is limited by instability rather than by expressivity or budget.
+
+---
+
+## Addendum (2026-11-06) — re-run under the corrected solver seam: verdict confirmed, "wall-pinned" withdrawn
+
+**Why.** Experiment B0 traced solver `RuntimeError`s to the free-phase Newton solve cold-started from the
+reference geometry failing its line search on pre-stressed lattices whose equilibria are unique and stable
+(see Experiment B's 2026-11-06 addendum). B2's eval-fail rates (32–47 %) and its "every optimum is pinned on
+the buckling boundary" reading rest on exactly those failures. Re-run with the corrected seam
+(`free_phase_mech` warm-start + `settle()` fallback), same config and seeds, 1876 s.
+
+**Observed (run 3).**
+
+| d | sep_min | sep_max | purity max | a₁₂₃ max | pinned | unstable seeds | eval-fail |
+|---|---|---|---|---|---|---|---|
+| 0.05 | −1.11 | **−2.75e-03** | 0.263 | 0.58 | 0.00 | 0.0 | 0.00 |
+| 0.10 | −1.35 | **−1.50e-02** | 0.637 (DE) | 1.16 | 0.00 | 0.0 | 0.00 |
+| 0.15 | −0.50 | **−1.18e-02** | 0.696 (DE) | 1.50 | 0.10 | 0.0 | 0.00 |
+| 0.20 | −0.57 | **−4.49e-03** | 0.445 | 0.49 | 0.10 | 0.0 | 0.00 |
+
+- **Separation is negative in all 42 solvable cells** (40 L-BFGS + 2 DE); the verdict is unchanged:
+  **FORECLOSE-REPRESENTABILITY-CONFIRMED**. The least-negative separations are now closer to zero
+  (−2.7e-3 at d = 0.05 vs −1.8e-2 in run 2) but never cross it.
+- **Eval-fail rates fell from 32–47 % to 0 %; the wall-pinned fraction from 1.00 to 0–0.10.** Every L-BFGS
+  cell converged (4–89 iterations, no restart exhaustion). Seed 1 is solvable at d ≥ 0.15 (it was "unstable
+  at init" in run 2).
+- **The parity channel grows far larger than run 2 found:** a₁₂₃ up to 1.5 (vs 0.47) and purity up to 0.70
+  (DE, d = 0.15; vs 0.55) — once the fake wall is gone the optimizer keeps going, and separation *still*
+  stays negative.
+- **Untrained lattice at d = 0.3 is solvable** (1 of 8 patterns needed the `settle()` rescue), with
+  parity/linear = 0.55 and purity 0.10 — a non-monotone jump above the d³ law (which predicts 0.075). A
+  separate probe (this day) finds the untrained lattice stable through d = 0.5 (smallest free-equilibrium
+  eigenvalue +0.012 at 0.3 and 0.4, +0.003 at 0.5; parity/linear 0.35 and 0.17 there), a Newton
+  *saddle* returned at d = 0.7 (eigenvalue −1.09 — Newton converges to saddles), and a genuine failure at
+  d = 1.0 (nodes coincide). The fold is near d ≈ 0.5–0.7, not 0.25–0.3.
+
+**Interpretation (corrected).**
+- The *representability* conclusion stands and is stronger: with no artificial wall, gradient and
+  gradient-free optimizers push the parity coefficient to ~1.5 lattice units and the purity to 0.70, and the
+  eight readouts still interleave — the remaining 30 % of non-constant energy, spread over six other Walsh
+  channels, is enough to break a two-sided threshold. Positive separation would need purity ≳ 0.85–0.9 for
+  this spread. **The wall is a representability wall, not an instability wall.**
+- The "parity-increasing direction *is* the buckling direction" claim and the "every optimum wall-pinned"
+  diagnostic are **withdrawn**; they were artifacts of the cold-start seam. `wall_pinned` remains a valid
+  diagnostic only under the corrected seam, where it reads 0–0.10.
+- The d³ scaling of the untrained parity channel holds for d ≤ 0.2 (the smooth-elasticity regime); above
+  that the response is strongly nonlinear and non-monotone in d, while remaining stable to d ≈ 0.5. The
+  extrapolated crossover (d ≈ 1.1) is still beyond the fold, but the actual parity/linear ratio peaks
+  around 0.55 at d = 0.3 rather than following the power law.
+- For the commons: the `expressivity-multistability-pincer` lesson's multistability half needs
+  re-establishment with the corrected seam before it is cited (roadmap item 10 asks the question properly);
+  the representability half is confirmed twice over (B, B2).
