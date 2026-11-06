@@ -13,10 +13,10 @@ the co-located ionic computing line. It contains two experiments in two media.
 | Experiment | Substrate | Task | Verdict |
 |---|---|---|---|
 | **A** | resistor / flow network (scalar potential) | allostery + regression | **PASS** — the physics computes the update |
-| **B** | 2D nonlinear spring network (signed displacements) | parity-3 | **FORECLOSE** — elastic state can't clear the wall |
+| **B** | 2D nonlinear spring network (signed displacements) | parity-3 | **FORECLOSE-REPRESENTABILITY** — elastic state can't represent parity-3 (2026-11-06 correction: the June "multistability" leg was a solver artifact) |
 | **B2** (2026-11-05) | same lattice, offline representability re-probe | parity-3 | **FORECLOSE-REPRESENTABILITY-CONFIRMED** — B's foreclosure is not a budget/objective artifact |
-| **B0** (2026-11-06) | 2D spring network, local rule vs ceiling + matched GD | mechanical allostery: attenuate / amplify / invert | **PASS / MULTISTABILITY-FORECLOSE / PASS** — the rule learns at network scale (incl. a sign inversion); amplification drives the lattice into buckling, and so does offline GD |
-| **B0-noise** (2026-11-06) | same, read noise in the two bond reads | amplify | **H5-MECHANISM-CONFIRMED** — independent-read noise forecloses (by buckling) at σ = 1e-3, common-mode never |
+| **B0** (2026-11-06) | 2D spring network, local rule vs ceiling + matched GD | mechanical allostery: attenuate / amplify / invert | **PASS / AMBIGUOUS / PASS** — the rule learns at network scale (incl. a sign inversion), beats matched-budget GD in 7/9 cells, no instability |
+| **B0-noise** (2026-11-06) | same, read noise in the two bond reads | amplify | **H5-MECHANISM-CONFIRMED** — independent-read wall at σ = 1e-3 (β 0.05) / 1e-2 (β 0.2), common-mode never; noise-helps transient below the wall |
 | **A2** (2026-11-06) | heterogeneous resistor net; Poiseuille law | β-law; A's tasks | **1 − ρ ∝ β^2.00**; Poiseuille **PASS** on both tasks |
 
 **Experiment A (PASS).** A passive resistor network, trained only by the local two-phase
@@ -25,14 +25,16 @@ per-step update equals the true loss gradient as the nudge `β→0` (sign-match 
 confirms 100% physics-local updates. *The dual-role learning thesis is real in a substrate.* (Positive
 conductances obey the maximum principle, so A is deliberately **not** for parity.)
 
-**Experiment B (FORECLOSE).** The signed/non-monotone elastic substrate does **not** clear the parity-3
-wall, in a two-part way: (1) in the stable low-deformation regime the offline optimizer cannot represent
-parity-3 anywhere swept (deformation `d`, asymmetry `α`, network size, random inits → separation always
-negative); (2) the deformation needed for strong non-monotonicity is exactly where the network buckles
-(indefinite tangent stiffness → multistability), so the two-phase rule becomes ill-defined. The
-*mechanism* is sound — the keystone confirms the local rule equals the true gradient (ρ 1.0). The limit is
-the substrate, not co-located learning. → **The wall is deeper than passivity**; escalate to project `03`
-(energy-based/Ising). See `docs/superpowers/specs/2026-06-19-experiment-b-findings.md`.
+**Experiment B (FORECLOSE-REPRESENTABILITY; corrected 2026-11-06).** The signed/non-monotone elastic
+substrate does **not** clear the parity-3 wall: the offline optimizer cannot represent parity-3 anywhere
+swept (deformation `d`, asymmetry `α`, network size, random inits → separation always negative). The June
+2026 headline also reported a *multistability* leg (jump rates 0.19–0.26, "the two-phase rule becomes
+ill-defined where the lattice buckles"); that leg was a **solver artifact** — the free-phase Newton solve,
+cold-started from the reference geometry, failed its line search on pre-stressed lattices whose equilibria
+are unique and stable. Under the corrected seam every jump rate is 0.00 and the verdict is
+FORECLOSE-REPRESENTABILITY. The *mechanism* is sound — the keystone confirms the local rule equals the true
+gradient (ρ 1.0). → **The wall is deeper than passivity**; escalate to project `03` (energy-based/Ising).
+See `docs/superpowers/specs/2026-06-19-experiment-b-findings.md` (with its 2026-11-06 addendum).
 
 **Experiment B2 (re-probe, 2026-11-05).** B's representability leg rested on a fixed-scale MSE target,
 plain gradient descent and a fixed budget — the three ingredients the portfolio commons has since
@@ -46,16 +48,17 @@ parity coefficient several-hundred-fold, but every optimum is **pinned on the bu
 restart evaluation and ranked roadmap are in `2026-11-05-project-status-and-roadmap.md`.
 
 **Experiment B0 (2026-11-06).** The positive control B never ran: on *mechanical allostery* the local rule
-learns at network scale, 100 % physics-local — attenuation to ~1e-3 normalized error and a **sign inversion**
-of the allosteric response (which needs pre-stress / geometric nonlinearity) to ~5e-3, beating matched-budget
-offline GD by 30–100× on inversion. Amplification is learned to near the ceiling and then **the lattice
-buckles** (2 of 3 seeds, at epochs 54 and 4434) — and the offline GD baseline buckles at nearly the same
-epochs: amplifying a response means driving a stiffness toward zero, so loss descent on this medium marches
-toward the stability boundary. A read-noise sweep on the same task confirms the commons' H5 two-read
-fragility mechanism on an elastic substrate, with the tax paid as buckling rather than misdirection. See
-`docs/superpowers/specs/2026-11-06-experiment-b0-findings.md` and `2026-11-06-experiment-b0-noise-findings.md`.
-The Experiment C design (`2026-11-06-experiment-c-design.md`) proposes embracing bistability; its first
-blocker, a solver that finds minima through snaps, is `mechanical_solver.settle()`.
+learns at network scale, 100 % physics-local — attenuation to ~1e-3 normalized error, amplification to
+5e-5 – 3e-3, and a **sign inversion** of the allosteric response (which needs pre-stress / geometric
+nonlinearity) to ~5e-3 — beating matched-budget offline GD in 7 of 9 cells (30–100× on inversion) with no
+instability at any deformation probed. A read-noise sweep on the same task confirms the commons' H5
+two-read fragility mechanism on an elastic substrate, with the independent-read wall scaling with β and a
+noise-helps transient below it. B0 also exposed the cold-start solver artifact that had produced B's
+"multistability" and B0's own first-run "buckling"; the seam now warm-starts and falls back to a damped
+minimizer (`settle()`), and stability is *measured* (smallest tangent-stiffness eigenvalue) rather than
+inferred from crashes. See `docs/superpowers/specs/2026-11-06-experiment-b0-findings.md` and
+`2026-11-06-experiment-b0-noise-findings.md`. The Experiment C design (`2026-11-06-experiment-c-design.md`)
+proposes embracing bistability deliberately.
 
 **Why the keystones hold (commons lesson `gradient-flow-is-the-ep-license`).** Both substrates are genuine
 gradient flows — the resistor net minimizes a co-content, the spring net its elastic energy — which is

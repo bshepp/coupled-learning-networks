@@ -101,6 +101,25 @@ means the claim was under-supported. **Experiment B2 (today) re-probes exactly t
 
 ---
 
+## Correction (2026-11-06) — a solver artifact in the crash-tolerant seam
+
+Experiment B0's trajectory diagnostics traced "instability events" to the free-phase Newton solve
+**cold-started from the reference geometry** failing its line search on pre-stressed lattices whose
+equilibria are unique and stable. The seam now warm-starts from the previous equilibrium, falls back to a
+Levenberg–Marquardt minimizer (`settle()`), counts rescues separately, and **measures** the stability margin
+(smallest tangent-stiffness eigenvalue). Consequences, all re-run and recorded in addenda:
+- **Experiment B:** jump rates 0.19/0.00/0.26 → **0.00/0.00/0.00**; verdict MULTISTABILITY-FORECLOSE →
+  **FORECLOSE-REPRESENTABILITY**. The "pincer" multistability leg is withdrawn; the representability leg
+  (confirmed by B2) is the whole verdict. The commons' `expressivity-multistability-pincer` lesson should be
+  re-read with this.
+- **Experiment B0:** amplify MULTISTABILITY-FORECLOSE → **AMBIGUOUS** (2 PASS, 1 learns-but-misses-GD);
+  "loss descent marches toward buckling" withdrawn; stability margin drifts 10–30 % over 6000 epochs.
+- **Read-noise sweep:** "tax paid as buckling" → drift; β-scaling of the wall now resolved (1e-3 → 1e-2).
+- **Experiment B2:** the untrained lattice is stable through d = 0.5 (not "buckled at 0.3"); its wall-pinned
+  diagnostic and the DE/L-BFGS eval-failure rates are re-run (addendum in the B2 findings).
+- **Lesson candidate for the commons:** a crash-tolerant solver seam must distinguish "the solver failed from
+  its start point" from "no stable equilibrium exists"; count only the latter as physics.
+
 ## Roadmap (ranked)
 
 1. **B2 — representability re-probe (done today).** Outcome **FORECLOSE-REPRESENTABILITY-CONFIRMED**:
@@ -113,10 +132,10 @@ means the claim was under-supported. **Experiment B2 (today) re-probes exactly t
    smoke tests' `fraction_physics_local == 1.0` invariant is untouched), and tag headline updates
    `(physical, physical)`, baselines `(cpu, electronic)`. Small, mechanical, closes the open RECONCILE.
 3. **B's multistability leg: a monostable-regime learnability study** — *done as Experiment B0,
-   2026-11-06*: attenuate PASS, invert PASS (a sign inversion, 100 % physics-local), amplify
-   MULTISTABILITY-FORECLOSE because loss descent itself drives the lattice into buckling (GD too); d-map:
-   stable at d_max ≤ 0.1, buckles within 1000 epochs at ≥ 0.2. Read-noise sweep (item 6) run on the same
-   task: H5-MECHANISM-CONFIRMED, tax paid as buckling. See the two 2026-11-06 findings docs.** The B design said a
+   2026-11-06, and it dissolved the leg*: attenuate PASS, invert PASS (a sign inversion, 100 % physics-local),
+   amplify AMBIGUOUS (2 PASS; one seed 2.6× behind matched GD); no instability at d_max ≤ 0.3; the rule
+   beats matched-budget GD in 7/9 cells. Read-noise sweep (item 6): H5-MECHANISM-CONFIRMED with β-scaling.
+   See the two 2026-11-06 findings docs and the correction above.** The B design said a
    MULTISTABILITY-FORECLOSE "would motivate damped-dynamics relaxation or a monostable-regime study".
    With kernels 10× faster, sweep (d, pre-stress) with a jump-rate map and ask whether *any* region is
    both stable and learnable for a friendlier mechanical task (allostery-in-elastic) — this separates
@@ -141,16 +160,21 @@ means the claim was under-supported. **Experiment B2 (today) re-probes exactly t
 
 ---
 
-7. **Stability-regularized local rule (new, from B0).** B0 shows amplification drives the lattice to its
-   buckling threshold whoever computes the update. The bond tangent stiffness `kt` is bond-local, so a
-   physics-local rule can sense incipient buckling and damp its own update. Pre-register: amplify PASSes
-   across seeds without tail instability, audit stays 100 % physics-local; compare to an η schedule
-   (non-local control). Cheap: one rule variant + the B0 driver.
+7. **(Downgraded.) Stability-regularized local rule.** Motivated by B0 run 1's buckling, which was the
+   solver artifact. The measured margin drifts only 10–30 % over 6000 epochs; revisit only if a longer
+   budget or larger d_max shows the margin actually approaching zero (`min_eig_history` now records it).
 8. **Conditioning of the two-phase update vs plain GD (from B0's follow-up).** The local rule beat
    matched-budget GD 30–100× on inversion with smaller steps and β-independence; GD is unstable above
    lr ≈ 0.5. Measure the loss Hessian spectrum and the rule's effective preconditioner. Interpretation
    only; no verdict.
-9. **Resolve the read-noise β-scaling** with a half-decade σ grid around 1e-3 and β ∈ {0.02, 0.5}.
+9. **Read-noise follow-ups.** β-scaling is resolved (run 2). Open: the *noise-helps transient* — at σ = 1e-3
+   the noisy trajectory's best error is ~100× below the clean run's; pre-register an annealed-σ run
+   (commons `noise-as-resource`).
+10. **Experiment B's multistability question, done properly.** With the corrected seam and the measured
+    margin, sweep d upward on the parity lattice (B2's untrained probe shows the fold near d ≈ 0.5–0.7) and
+    ask whether genuine multistability (basin jumps between consecutive equilibria, settle() finding
+    different minima) ever appears in the regime where the parity channel is large — the question B's June
+    headline thought it had answered.
 
 ## Files touched today
 `spring_network.py` (vectorized), `baselines.py` (`mech_readout_adjoint`, vectorized), `parity_analysis.py`
