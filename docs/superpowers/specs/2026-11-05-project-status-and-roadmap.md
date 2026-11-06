@@ -141,6 +141,17 @@ means the claim was under-supported. **Experiment B2 (today) re-probes exactly t
 
 ---
 
+7. **Stability-regularized local rule (new, from B0).** B0 shows amplification drives the lattice to its
+   buckling threshold whoever computes the update. The bond tangent stiffness `kt` is bond-local, so a
+   physics-local rule can sense incipient buckling and damp its own update. Pre-register: amplify PASSes
+   across seeds without tail instability, audit stays 100 % physics-local; compare to an η schedule
+   (non-local control). Cheap: one rule variant + the B0 driver.
+8. **Conditioning of the two-phase update vs plain GD (from B0's follow-up).** The local rule beat
+   matched-budget GD 30–100× on inversion with smaller steps and β-independence; GD is unstable above
+   lr ≈ 0.5. Measure the loss Hessian spectrum and the rule's effective preconditioner. Interpretation
+   only; no verdict.
+9. **Resolve the read-noise β-scaling** with a half-decade σ grid around 1e-3 and β ∈ {0.02, 0.5}.
+
 ## Files touched today
 `spring_network.py` (vectorized), `baselines.py` (`mech_readout_adjoint`, vectorized), `parity_analysis.py`
 (new), `experiment_b2.py` (new), `tasks.py` (`verdict_b2`), `experiment_b.py` (alignment at init, η/β),
