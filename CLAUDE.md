@@ -96,10 +96,11 @@ init, not at convergence** (commons pattern `alignment-certification`: at a loss
 - **Offline ceilings must be budget-saturated and scale-free** before a FORECLOSE is recorded off them
   (commons `foreclosure-can-be-a-budget-artifact`); B2 is the template (saturation trace + scale-free
   objective + second optimizer class).
-- **Loss descent on the elastic medium marches toward buckling** (B0: amplification learned to near-ceiling,
-  then the lattice buckles — local rule AND offline GD alike; larger d_max → sooner). Always record the
-  trajectory (`best_error`, `first_jump_epoch`, `jump_rate_tail`), never the endpoint alone, and gate
-  multistability on the TAIL jump rate so a late blow-up is labelled as instability, not learnability.
+- **Measure stability, never infer it from crashes.** B0's first run read "amplification drives the lattice
+  into buckling"; it was the cold-start artifact (see above). Under the corrected seam amplification learns
+  cleanly for 6000 epochs while the measured margin (`min_eig_history`, the smallest tangent-stiffness
+  eigenvalue of the free equilibria) drifts only 0.030 → 0.027. Always record the trajectory (`best_error`,
+  `first_jump_epoch`, `jump_rate_tail`, `min_eig_history`, `rescues`), never the endpoint alone.
 - **Compare the local rule to a matched-budget GD baseline (lr = η, same epochs) AND to the converged
   `mech_ceiling`**; plain GD at a fixed budget understated representability by 100× in B0's pilots.
 - **Knife-edge solves near buckling are not bit-reproducible** across numpy builds (seed-1 baseline in B
