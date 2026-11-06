@@ -104,3 +104,19 @@ def test_read_noise_common_mode_cancels_in_the_rest_length_update_but_independen
     _, dl_i = local_update_mech(net, k, l, xf, xn, 0.05, 1.0, 1.0, read_noise=indep)
     assert dl_c == pytest.approx(dl0, abs=1e-12)                 # symmetric springs: dl ∝ k(e_n - e_f)
     assert np.linalg.norm(dl_i - dl0) > 10 * np.linalg.norm(dl0)  # the independent two-read noise swamps it
+
+
+def test_free_phase_rescues_a_newton_failure_and_flags_it():
+    from spring_network import SpringNetwork, dof
+    # pre-compressed two-bar snap cell with no inputs: starting AT the saddle, Newton raises, settle rescues
+    x0 = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]])
+    net = SpringNetwork(x0, [(0, 1), (1, 2)], pinned_dofs=[dof(0, 0), dof(0, 1), dof(2, 0), dof(2, 1)],
+                        input_dofs=[], output_dof=dof(1, 1))
+    k = np.array([1.0, 1.0]); l = np.array([1.1, 1.1])
+    near_saddle = x0.copy(); near_saddle[1, 1] = 0.02
+    with pytest.raises(RuntimeError):
+        free_phase_mech(net, k, l, np.array([]), 1.0, x_init=near_saddle, robust=False)
+    x, info = free_phase_mech(net, k, l, np.array([]), 1.0, x_init=near_saddle)
+    assert info["rescued"] is True and abs(abs(x[1, 1]) - np.sqrt(1.1 ** 2 - 1)) < 1e-6
+    x2, info2 = free_phase_mech(net, k, l, np.array([]), 1.0, x_init=x)   # warm start from the well
+    assert info2["rescued"] is False and x2 == pytest.approx(x, abs=1e-8)

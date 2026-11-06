@@ -6,7 +6,7 @@ length l from the LOCAL extension contrast between the two relaxed states. No gl
 a weight."""
 import numpy as np
 from spring_network import bond_extensions, m, dm
-from mechanical_solver import relax_mech, basin_jump
+from mechanical_solver import relax_mech, basin_jump, settle
 from tasks import two_sided_separation, task_error
 from audit import PHYSICS_LOCAL
 
@@ -32,8 +32,26 @@ def readout(net, x):
     return float(x[node, dim] - net.x0[node, dim])
 
 
-def free_phase_mech(net, k, l, pattern, d):
-    return relax_mech(net, k, l, _input_clamp(net, pattern, d), x_init=net.x0)
+def free_phase_mech(net, k, l, pattern, d, x_init=None, robust=True):
+    """Free-phase equilibrium. x_init defaults to the reference geometry x0; pass the previous
+    equilibrium to warm-start (the lattice does not reset between epochs). robust=True: if Newton's
+    line search fails from the start point, fall back to settle() (LM-damped) and flag the rescue in
+    info["rescued"]. A failure of settle() too is a genuine instability and still raises RuntimeError.
+    (2026-11-06: B0 found that a cold start from x0 on a strongly pre-stressed lattice fails Newton's
+    line search even though the equilibrium is unique and stable -- a solver artifact that was being
+    counted as buckling.)"""
+    clamp = _input_clamp(net, pattern, d)
+    x0 = net.x0 if x_init is None else x_init
+    try:
+        x, info = relax_mech(net, k, l, clamp, x_init=x0)
+        info["rescued"] = False
+        return x, info
+    except RuntimeError:
+        if not robust:
+            raise
+        x, info = settle(net, k, l, clamp, x_init=x0)
+        info["rescued"] = True
+        return x, info
 
 
 def nudged_phase_mech(net, k, l, pattern, d, target, beta, x_free):
@@ -81,15 +99,18 @@ def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
     targets = task_targets(task)
     k = np.array(k0, float); l = np.array(l0, float)
     sep_history = []; error_history = []; jump_history = []
-    jumps = 0; trials = 0
+    jumps = 0; trials = 0; rescues = 0
     readouts = np.zeros(len(patterns))
+    x_prev = [None] * len(patterns)          # warm start: each pattern's last free equilibrium
     for _ in range(epochs):
         dk = np.zeros_like(k); dl = np.zeros_like(l)
         readouts = np.zeros(len(patterns))
         epoch_jumps = 0
         for p in range(len(patterns)):
             try:
-                xf, _ = free_phase_mech(net, k, l, patterns[p], d)
+                xf, info_f = free_phase_mech(net, k, l, patterns[p], d, x_init=x_prev[p])
+                rescues += int(info_f.get("rescued", False))
+                x_prev[p] = xf
                 readouts[p] = readout(net, xf)
                 xn, _, r_free = nudged_phase_mech(net, k, l, patterns[p], d, targets[p], beta, xf)
                 jumped, _ = basin_jump(xf, xn, expected=abs(beta * (targets[p] - r_free)) + 1e-12)
@@ -98,8 +119,10 @@ def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
                                              read_noise=read_noise)
                 dk += ddk; dl += ddl
             except RuntimeError:
-                # Solver failure = instability event; count it and skip this pattern's update
+                # Solver failure (after the settle() fallback) = genuine instability event; count it,
+                # skip this pattern's update, and drop its warm start
                 jumps += 1; epoch_jumps += 1; trials += 1
+                x_prev[p] = None
         jump_history.append(epoch_jumps)
         k = np.clip(k + dk / len(patterns), k_min, k_max)
         l = np.clip(l + dl / len(patterns), l_min, l_max)
@@ -117,4 +140,4 @@ def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
             # instability in the LAST 20% of epochs: distinguishes a rule that drives the lattice into
             # buckling late in training (tail rate -> 1) from a transient early jump
             "jump_rate_tail": sum(jump_history[-tail:]) / max(tail * P, 1),
-            "first_jump_epoch": first_jump, "readouts": readouts}
+            "first_jump_epoch": first_jump, "rescues": rescues, "readouts": readouts}

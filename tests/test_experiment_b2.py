@@ -25,8 +25,14 @@ def test_barrier_points_back_to_the_last_solvable_point():
     probe = Probe(task)
     theta = _init(task, 0)
     L0, _ = probe.cosine_loss(theta)
-    bad = theta.copy(); bad[probe.E:] *= 3.0          # absurd rest lengths: the solve fails
-    Lb, gb = probe.cosine_loss(bad)
+    bad = theta.copy(); bad[probe.E:] *= 3.0
+
+    class Unsolvable(RuntimeError):
+        pass
+    orig = probe.readouts
+    probe.readouts = lambda k, l: (_ for _ in ()).throw(Unsolvable("forced genuine instability"))
+    Lb, gb = probe.cosine_loss(bad)                   # the solve "fails": barrier back to theta
+    probe.readouts = orig
     assert probe.n_fail == 1 and Lb > L0
     assert gb @ (theta - bad) < 0                     # descent direction leads back toward theta
 
