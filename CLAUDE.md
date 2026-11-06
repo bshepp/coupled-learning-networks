@@ -15,7 +15,7 @@ valid, valued result** — the goal is the truth, not a PASS. Read `README.md` a
 
 ```bash
 pip install -r requirements.txt
-python -m pytest -q                                   # full suite (~70 tests, one module per source module, ~12 s)
+python -m pytest -q                                   # full suite (~76 tests, one module per source module, ~14 s)
 python -m pytest tests/test_coupled_learning.py -q    # one module
 python -m pytest tests/test_coupled_learning.py::test_training_reduces_error   # one test
 python experiment_a.py        # Experiment A driver: prints table, writes experiment_a_results.json
@@ -24,6 +24,7 @@ python experiment_b2.py       # Experiment B2: offline representability re-probe
 python experiment_b0.py       # Experiment B0: mechanical allostery (local rule vs mech_ceiling + matched GD, d-map), ~26 min
 python experiment_b0_noise.py # read-noise sweep (independent vs common-mode) on B0's amplify task, ~14 min
 python experiment_a2.py       # Experiment A2: beta-law on a heterogeneous net + Poiseuille headline, ~1 s
+python experiment_b3.py       # Experiment B3: parity-3 vs deformation with multistability MEASURED (multi-start settle), ~20 min
 ```
 
 Stack: Python + numpy + scipy + pytest. No deep-learning framework — all "true" gradients are hand-written
@@ -52,6 +53,7 @@ Two parallel module families, distinguished by the `_mech` / `mechanical_` / `sp
 | Friendly-task positive control | `experiment_a.py` (A), `experiment_a2.py` (β-law, Poiseuille) | `experiment_b0.py` (allostery; `verdict_b0`), `experiment_b0_noise.py` (H5; `verdict_b0_noise`) |
 | Converged representability ceiling | — | `baselines.mech_ceiling` (L-BFGS-B + stability barrier) — use beside any plain-GD baseline |
 | Minimum-finding through snaps (Experiment C) | — | `mechanical_solver.settle()` (LM-damped; `relax_mech` stays the raising Newton solver) |
+| Multistability, measured | — | `experiment_b3.py` (`validate`: distinct minima per pattern, lowest-energy readout, min eigenvalue; `verdict_b3`) |
 
 Shared: `tasks.py` (task definitions, error/separation metrics, **`verdict()` and `verdict_b()`**) and
 `audit.py` (the provenance hook). `tasks.py` and `baselines.py` each hold both A and B sections in one file.
@@ -96,6 +98,9 @@ init, not at convergence** (commons pattern `alignment-certification`: at a loss
 - **Offline ceilings must be budget-saturated and scale-free** before a FORECLOSE is recorded off them
   (commons `foreclosure-can-be-a-budget-artifact`); B2 is the template (saturation trace + scale-free
   objective + second optimizer class).
+- **A trained run's own readouts are basin-dependent once the lattice is multistable** (d ≳ 0.3 on the
+  parity lattice: 2–5 minima per pattern). Validate any positive separation with `experiment_b3.validate`
+  (multi-start `settle()`, lowest-energy minimum) before calling it a property of the lattice.
 - **Measure stability, never infer it from crashes.** B0's first run read "amplification drives the lattice
   into buckling"; it was the cold-start artifact (see above). Under the corrected seam amplification learns
   cleanly for 6000 epochs while the measured margin (`min_eig_history`, the smallest tangent-stiffness
