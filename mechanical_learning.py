@@ -98,18 +98,19 @@ def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
     labels = task.get("labels")
     targets = task_targets(task)
     k = np.array(k0, float); l = np.array(l0, float)
-    sep_history = []; error_history = []; jump_history = []
+    sep_history = []; error_history = []; jump_history = []; min_eig_history = []
     jumps = 0; trials = 0; rescues = 0
     readouts = np.zeros(len(patterns))
     x_prev = [None] * len(patterns)          # warm start: each pattern's last free equilibrium
     for _ in range(epochs):
         dk = np.zeros_like(k); dl = np.zeros_like(l)
         readouts = np.zeros(len(patterns))
-        epoch_jumps = 0
+        epoch_jumps = 0; epoch_min_eig = float("inf")
         for p in range(len(patterns)):
             try:
                 xf, info_f = free_phase_mech(net, k, l, patterns[p], d, x_init=x_prev[p])
                 rescues += int(info_f.get("rescued", False))
+                epoch_min_eig = min(epoch_min_eig, info_f.get("min_eig", float("inf")))
                 x_prev[p] = xf
                 readouts[p] = readout(net, xf)
                 xn, _, r_free = nudged_phase_mech(net, k, l, patterns[p], d, targets[p], beta, xf)
@@ -124,6 +125,7 @@ def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
                 jumps += 1; epoch_jumps += 1; trials += 1
                 x_prev[p] = None
         jump_history.append(epoch_jumps)
+        min_eig_history.append(epoch_min_eig)      # the measured stability margin of the free equilibria
         k = np.clip(k + dk / len(patterns), k_min, k_max)
         l = np.clip(l + dl / len(patterns), l_min, l_max)
         if labels is not None:
@@ -140,4 +142,5 @@ def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
             # instability in the LAST 20% of epochs: distinguishes a rule that drives the lattice into
             # buckling late in training (tail rate -> 1) from a transient early jump
             "jump_rate_tail": sum(jump_history[-tail:]) / max(tail * P, 1),
-            "first_jump_epoch": first_jump, "rescues": rescues, "readouts": readouts}
+            "first_jump_epoch": first_jump, "rescues": rescues, "readouts": readouts,
+            "min_eig_history": min_eig_history}

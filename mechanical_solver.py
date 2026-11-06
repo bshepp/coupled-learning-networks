@@ -14,11 +14,14 @@ def relax_mech(net, k, l, clamp, x_init=None, max_iter=100, tol=1e-8):
         node, dim = divmod(d, 2); x[node, dim] = v
     free = np.array([d for d in range(2 * n) if d not in clamp], int)
     if free.size == 0:
-        return x, {"converged": True, "iters": 0, "energy": energy(net, x, k, l)}
+        return x, {"converged": True, "iters": 0, "energy": energy(net, x, k, l), "min_eig": float("inf")}
     for it in range(max_iter):
         R = forces(net, x, k, l).reshape(-1)[free]          # net force on free DOFs (want 0)
         if np.max(np.abs(R)) < tol:
-            return x, {"converged": True, "iters": it, "energy": energy(net, x, k, l)}
+            Hff = tangent_stiffness(net, x, k, l)[np.ix_(free, free)]
+            # stability is MEASURED at convergence: Newton converges to saddles as readily as to minima
+            return x, {"converged": True, "iters": it, "energy": energy(net, x, k, l),
+                       "min_eig": float(np.linalg.eigvalsh(Hff)[0])}
         H = tangent_stiffness(net, x, k, l)
         Hff = H[np.ix_(free, free)]
         try:

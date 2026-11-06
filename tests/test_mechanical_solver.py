@@ -66,3 +66,14 @@ def test_settle_finds_a_well_where_relax_mech_raises_and_never_returns_the_saddl
     x_in, _ = settle(net, k, l, clamp, x_init=np.array([[0.0, 0.0], [1.0, 0.3], [2.0, 0.0]]))
     x_ref, _ = relax_mech(net, k, l, clamp, x_init=np.array([[0.0, 0.0], [1.0, 0.3], [2.0, 0.0]]))
     assert x_in == pytest.approx(x_ref, abs=1e-7)                     # in-basin it agrees with Newton
+
+
+def test_relax_reports_the_measured_stability_margin():
+    net, l = _bridge()
+    k = np.array([1.0, 1.0])
+    clamp = {d: net.x0.reshape(-1)[d] for d in net.pinned_dofs}
+    _, info = relax_mech(net, k, l, clamp, x_init=net.x0.copy())
+    assert info["min_eig"] > 0                                        # a genuine minimum
+    net_s, k_s, l_s, clamp_s = _snap_cell()
+    _, info_s = relax_mech(net_s, k_s, l_s, clamp_s, x_init=net_s.x0.copy())   # started exactly at the saddle
+    assert info_s["converged"] and info_s["min_eig"] < 0              # Newton "converges" to the saddle: measured

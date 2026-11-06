@@ -120,3 +120,14 @@ def test_free_phase_rescues_a_newton_failure_and_flags_it():
     assert info["rescued"] is True and abs(abs(x[1, 1]) - np.sqrt(1.1 ** 2 - 1)) < 1e-6
     x2, info2 = free_phase_mech(net, k, l, np.array([]), 1.0, x_init=x)   # warm start from the well
     assert info2["rescued"] is False and x2 == pytest.approx(x, abs=1e-8)
+
+
+def test_train_mech_tracks_the_stability_margin():
+    net, k0, l0 = _small_task()
+    pattern = np.array([1.0, -1.0, 1.0])
+    r0 = readout(net, free_phase_mech(net, k0, l0, pattern, d=0.3)[0])
+    task = {"net": net, "patterns": np.array([pattern]), "labels": np.array([1.0]),
+            "d": 0.3, "target_pos": r0 + 0.05, "target_neg": -(r0 + 0.05)}
+    res = train_mech(task, k0, l0, beta=0.05, eta_k=0.1, eta_l=0.1, epochs=5)
+    assert len(res["min_eig_history"]) == 5 and all(v > 0 for v in res["min_eig_history"])
+    assert res["rescues"] == 0
