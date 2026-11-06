@@ -225,3 +225,35 @@ def verdict_b0_noise(walls, control_ok, min_gap=10.0, max_same=3.0):
     else:
         out["status"] = "AMBIGUOUS"
     return out
+
+
+def verdict_b3(rows, k=3.0, multi_frac=0.5):
+    """Pre-registered verdict for Experiment B3 (parity-3 on the elastic lattice vs deformation, with
+    multistability MEASURED by multi-start minimization). rows: one dict per (d, seed) with
+    sep_traj (two-sided separation of the trained run's own readouts), sep_lowest (separation re-evaluated
+    at each pattern's lowest-energy minimum), snr_lowest (sep_lowest / floor), frac_multi (fraction of
+    patterns with >= 2 distinct minima), min_eig (smallest eigenvalue over the validated minima).
+    Per d (all seeds):
+      PASS-ROBUST                sep_lowest > 0 on every seed with snr_lowest >= k and min_eig > 0
+      MULTISTABLE-HYSTERETIC     frac_multi >= multi_frac on a majority of seeds AND some seed has
+                                 sep_traj > 0 while sep_lowest <= 0 (separation by basin selection, not by
+                                 the thermodynamically selected state)
+      FORECLOSE-REPRESENTABILITY frac_multi < multi_frac on every seed and sep_lowest <= 0 on every seed
+      AMBIGUOUS                  otherwise."""
+    out = {}
+    for d in sorted({r["d"] for r in rows}):
+        rs = [r for r in rows if r["d"] == d]
+        multi = [r["frac_multi"] >= multi_frac for r in rs]
+        if all(r["sep_lowest"] > 0 and r["snr_lowest"] >= k and r["min_eig"] > 0 for r in rs):
+            status = "PASS-ROBUST"
+        elif sum(multi) > len(rs) / 2 and any(r["sep_traj"] > 0 and r["sep_lowest"] <= 0 for r in rs):
+            status = "MULTISTABLE-HYSTERETIC"
+        elif not any(multi) and all(r["sep_lowest"] <= 0 for r in rs):
+            status = "FORECLOSE-REPRESENTABILITY"
+        else:
+            status = "AMBIGUOUS"
+        out[str(d)] = {"status": status, "n_seeds": len(rs),
+                       "frac_multi_mean": float(np.mean([r["frac_multi"] for r in rs])),
+                       "sep_traj_min": float(min(r["sep_traj"] for r in rs)),
+                       "sep_lowest_max": float(max(r["sep_lowest"] for r in rs))}
+    return out

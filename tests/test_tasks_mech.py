@@ -113,3 +113,23 @@ def test_verdict_b0_noise_branches():
     assert verdict_b0_noise(w_same, True)["status"] == "H5-MECHANISM-REFUTED"
     w_amb = {("independent", 0.05): 1e-4, ("common", 0.05): 1e-2, ("independent", 0.2): 1e-5, ("common", 0.2): inf}
     assert verdict_b0_noise(w_amb, True)["status"] == "AMBIGUOUS"   # wall does not grow with beta
+
+
+# --- verdict_b3 (multistability measured) ---------------------------------------------------------
+from tasks import verdict_b3
+
+
+def _r3(d, seed, sep_traj, sep_lowest, frac_multi, min_eig=0.01, floor=1e-3):
+    return {"d": d, "seed": seed, "sep_traj": sep_traj, "sep_lowest": sep_lowest,
+            "snr_lowest": sep_lowest / floor, "frac_multi": frac_multi, "min_eig": min_eig}
+
+
+def test_verdict_b3_branches():
+    rows = [_r3(0.1, s, -0.07, -0.07, 0.0) for s in range(3)]
+    assert verdict_b3(rows)["0.1"]["status"] == "FORECLOSE-REPRESENTABILITY"
+    rows = [_r3(0.5, 0, 0.37, -1.6, 0.9), _r3(0.5, 1, 0.45, -0.75, 0.6), _r3(0.5, 2, 0.07, -0.4, 0.9)]
+    assert verdict_b3(rows)["0.5"]["status"] == "MULTISTABLE-HYSTERETIC"
+    rows = [_r3(0.3, s, 0.2, 0.1, 0.0) for s in range(3)]
+    assert verdict_b3(rows)["0.3"]["status"] == "PASS-ROBUST"
+    rows = [_r3(0.3, 0, 0.2, 0.1, 0.0, min_eig=-0.1), _r3(0.3, 1, 0.2, 0.1, 0.0)]
+    assert verdict_b3(rows)["0.3"]["status"] == "AMBIGUOUS"
