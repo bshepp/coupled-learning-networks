@@ -99,22 +99,29 @@ def allostery_mech_task(rows=4, cols=4, d_max=0.1, ratio=0.5, n_samples=6, seed=
 
 
 def verdict_b0(local_error, baseline_error, untrained_error, jump_rate, sign_match, rho,
-               tol=0.15, abs_floor=1e-3, rep_max=0.1, jump_max=0.2, sm_min=0.9, rho_min=0.8):
+               ceiling_error=None, tol=0.15, abs_floor=1e-3, rep_max=0.1, jump_max=0.2, sm_min=0.9,
+               rho_min=0.8):
     """Pre-registered verdict for Experiment B0 (does the mechanical local rule LEARN a representable
-    task on the elastic medium?). Evaluated in order:
+    task on the elastic medium?). baseline_error = the matched-budget offline GD (same epochs, lr = eta);
+    ceiling_error = the converged L-BFGS representability ceiling (defaults to baseline_error).
+    jump_rate should be the instability rate over the LAST 20% of training (train_mech's
+    jump_rate_tail), so a rule that drives the lattice into buckling late in training is labelled as
+    such rather than as a learnability failure. Evaluated in order:
       MULTISTABILITY-FORECLOSE   jump_rate > jump_max (the two-phase rule is ill-defined here)
-      FORECLOSE-REPRESENTABILITY the offline optimizer cannot bring normalized MSE below rep_max
+      FORECLOSE-REPRESENTABILITY the converged ceiling cannot bring normalized MSE below rep_max
       PASS                       local error <= max(baseline*(1+tol), abs_floor) AND init alignment holds
       FORECLOSE-LEARNABILITY     representable, but the local rule does not even halve the untrained error
       AMBIGUOUS                  otherwise (learns but misses the baseline, or weak alignment)."""
+    if ceiling_error is None:
+        ceiling_error = baseline_error
     out = {"local_error": float(local_error), "baseline_error": float(baseline_error),
-           "untrained_error": float(untrained_error), "jump_rate": float(jump_rate),
-           "sign_match": float(sign_match), "rho": float(rho)}
+           "ceiling_error": float(ceiling_error), "untrained_error": float(untrained_error),
+           "jump_rate": float(jump_rate), "sign_match": float(sign_match), "rho": float(rho)}
     learns = local_error <= max(baseline_error * (1.0 + tol), abs_floor)
     aligned = sign_match >= sm_min and rho >= rho_min
     if jump_rate > jump_max:
         out["status"] = "MULTISTABILITY-FORECLOSE"
-    elif not (baseline_error <= rep_max):
+    elif not (ceiling_error <= rep_max):
         out["status"] = "FORECLOSE-REPRESENTABILITY"
     elif learns and aligned:
         out["status"] = "PASS"

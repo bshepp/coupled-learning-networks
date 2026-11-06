@@ -88,6 +88,9 @@ def test_verdict_b0_branches_in_order():
     assert verdict_b0(5e-4, 1e-9, 1.0, 0.0, **ok)["status"] == "PASS"          # abs_floor saves a tiny baseline
     assert verdict_b0(1e-4, 1e-4, 1.0, 0.5, **ok)["status"] == "MULTISTABILITY-FORECLOSE"
     assert verdict_b0(1e-4, 0.5, 1.0, 0.0, **ok)["status"] == "FORECLOSE-REPRESENTABILITY"
+    # the representability gate is the converged ceiling, not the matched-budget baseline
+    assert verdict_b0(0.3, 0.1, 1.0, 0.0, ceiling_error=1e-3, **ok)["status"] == "AMBIGUOUS"
+    assert verdict_b0(1e-4, 1e-4, 1.0, 0.0, ceiling_error=0.5, **ok)["status"] == "FORECLOSE-REPRESENTABILITY"
     assert verdict_b0(0.8, 1e-4, 1.0, 0.0, **ok)["status"] == "FORECLOSE-LEARNABILITY"
     assert verdict_b0(0.1, 1e-4, 1.0, 0.0, **ok)["status"] == "AMBIGUOUS"       # learns, misses baseline
     assert verdict_b0(1e-4, 1e-4, 1.0, 0.0, sign_match=0.5, rho=0.2)["status"] == "AMBIGUOUS"

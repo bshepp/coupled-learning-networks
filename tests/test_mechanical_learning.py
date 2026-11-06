@@ -77,3 +77,15 @@ def test_local_update_aligns_with_true_gradient_as_beta_shrinks():
         neg_grad)
     assert align["sign_match"] >= 0.9
     assert align["rho"] >= 0.95
+
+
+def test_train_mech_reports_trajectory_diagnostics():
+    net, k0, l0 = _small_task()
+    pattern = np.array([1.0, -1.0, 1.0])
+    r0 = readout(net, free_phase_mech(net, k0, l0, pattern, d=0.3)[0])
+    task = {"net": net, "patterns": np.array([pattern]), "labels": np.array([1.0]),
+            "d": 0.3, "target_pos": r0 + 0.05, "target_neg": -(r0 + 0.05)}
+    res = train_mech(task, k0, l0, beta=0.05, eta_k=0.1, eta_l=0.1, epochs=20)
+    assert len(res["error_history"]) == 20 and res["best_error"] <= res["final_error"]
+    assert 0 <= res["best_epoch"] < 20 and res["first_jump_epoch"] is None   # stable small case
+    assert res["jump_rate_tail"] == 0.0
