@@ -45,9 +45,24 @@ def nudged_phase_mech(net, k, l, pattern, d, target, beta, x_free):
     return x, info, r_free
 
 
-def local_update_mech(net, k, l, x_free, x_nudged, beta, eta_k, eta_l, audit=None):
+def read_bond_extensions(net, x_free, x_nudged, l, read_noise=None):
+    """The two physical READS of each bond's extension that the local rule differences. read_noise =
+    {"sigma": s, "mode": "independent" | "common", "rng": Generator} adds Gaussian read noise of std s
+    (lattice-spacing units) to the reads: "independent" draws fresh noise for each read (the two-read
+    fragility mechanism, commons H5), "common" applies the same realization to both (a per-bond gauge
+    offset that the contrast cancels). The relaxations themselves stay noiseless."""
     ef = bond_extensions(net, x_free, l)
     en = bond_extensions(net, x_nudged, l)
+    if read_noise is not None and read_noise.get("sigma", 0.0) > 0:
+        s = float(read_noise["sigma"]); rng = read_noise["rng"]
+        xi1 = rng.standard_normal(ef.shape)
+        xi2 = rng.standard_normal(en.shape) if read_noise.get("mode", "independent") == "independent" else xi1
+        ef = ef + s * xi1; en = en + s * xi2
+    return ef, en
+
+
+def local_update_mech(net, k, l, x_free, x_nudged, beta, eta_k, eta_l, audit=None, read_noise=None):
+    ef, en = read_bond_extensions(net, x_free, x_nudged, l, read_noise)
     mf = m(ef, net.alpha, net.w); mn = m(en, net.alpha, net.w)
     dk = (eta_k / beta) * (0.5 * mf * ef ** 2 - 0.5 * mn * en ** 2)
     # dE/dl = -k*(0.5*m'(e)*e^2 + m(e)*e); contrast free - nudged
@@ -60,7 +75,7 @@ def local_update_mech(net, k, l, x_free, x_nudged, beta, eta_k, eta_l, audit=Non
 
 
 def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
-               k_min=1e-2, k_max=1e2, l_min=0.1, l_max=5.0, audit=None):
+               k_min=1e-2, k_max=1e2, l_min=0.1, l_max=5.0, audit=None, read_noise=None):
     net, patterns, d = task["net"], task["patterns"], task["d"]
     labels = task.get("labels")
     targets = task_targets(task)
@@ -79,7 +94,8 @@ def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
                 xn, _, r_free = nudged_phase_mech(net, k, l, patterns[p], d, targets[p], beta, xf)
                 jumped, _ = basin_jump(xf, xn, expected=abs(beta * (targets[p] - r_free)) + 1e-12)
                 jumps += int(jumped); epoch_jumps += int(jumped); trials += 1
-                ddk, ddl = local_update_mech(net, k, l, xf, xn, beta, eta_k, eta_l, audit=audit)
+                ddk, ddl = local_update_mech(net, k, l, xf, xn, beta, eta_k, eta_l, audit=audit,
+                                             read_noise=read_noise)
                 dk += ddk; dl += ddl
             except RuntimeError:
                 # Solver failure = instability event; count it and skip this pattern's update

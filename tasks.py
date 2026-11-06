@@ -187,3 +187,36 @@ def verdict_b2(rows, k=3.0, unstable_max=0.2, sat_tol=0.02):
     else:
         out["status"] = "AMBIGUOUS"
     return out
+
+
+def verdict_b0_noise(walls, control_ok, min_gap=10.0, max_same=3.0):
+    """Pre-registered verdict for the elastic read-noise sweep (commons H5, mechanism form -- no
+    hardware-realistic sigma exists for this medium, so the verdict is about the MECHANISM, not a
+    device). walls: {(mode, beta): sigma_wall} where sigma_wall is the smallest swept read-noise std at
+    which the trained error exceeds the wall criterion (inf if never). control_ok: the sigma = 0 rule
+    learns (positive control).
+      UNTESTED                 the clean rule does not learn -> the noise question is not askable here
+      H5-MECHANISM-CONFIRMED   independent-read wall >= min_gap x below the common-mode wall at every
+                               beta, AND the independent wall is lower at the smaller beta (eta/beta
+                               amplification)
+      H5-MECHANISM-REFUTED     independent and common-mode walls within max_same x at every beta
+      AMBIGUOUS                otherwise"""
+    out = {"walls": {f"{m}|{b}": float(w) for (m, b), w in walls.items()}, "control_ok": bool(control_ok)}
+    if not control_ok:
+        out["status"] = "UNTESTED"; return out
+    betas = sorted({b for (_, b) in walls})
+    gaps = []
+    for b in betas:
+        wi, wc = walls.get(("independent", b), float("inf")), walls.get(("common", b), float("inf"))
+        gaps.append(wc / wi if wi > 0 and np.isfinite(wi) else (1.0 if not np.isfinite(wc) else float("inf")))
+    ind = [walls.get(("independent", b), float("inf")) for b in betas]
+    beta_scaling = len(betas) < 2 or all(ind[i] <= ind[i + 1] for i in range(len(betas) - 1))
+    out["gaps_common_over_independent"] = gaps
+    out["independent_wall_grows_with_beta"] = bool(beta_scaling)
+    if all(g >= min_gap for g in gaps) and beta_scaling:
+        out["status"] = "H5-MECHANISM-CONFIRMED"
+    elif all(np.isfinite(g) and g <= max_same for g in gaps):
+        out["status"] = "H5-MECHANISM-REFUTED"
+    else:
+        out["status"] = "AMBIGUOUS"
+    return out

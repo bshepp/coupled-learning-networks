@@ -89,3 +89,18 @@ def test_train_mech_reports_trajectory_diagnostics():
     assert len(res["error_history"]) == 20 and res["best_error"] <= res["final_error"]
     assert 0 <= res["best_epoch"] < 20 and res["first_jump_epoch"] is None   # stable small case
     assert res["jump_rate_tail"] == 0.0
+
+
+def test_read_noise_common_mode_cancels_in_the_rest_length_update_but_independent_does_not():
+    from mechanical_learning import local_update_mech
+    net, k, l = _small_task()
+    pattern = np.array([1.0, -1.0, 1.0])
+    xf, _ = free_phase_mech(net, k, l, pattern, d=0.1)
+    xn, _, _ = nudged_phase_mech(net, k, l, pattern, d=0.1, target=0.1, beta=0.05, x_free=xf)
+    dk0, dl0 = local_update_mech(net, k, l, xf, xn, 0.05, 1.0, 1.0)
+    common = {"sigma": 1e-2, "mode": "common", "rng": np.random.default_rng(0)}
+    indep = {"sigma": 1e-2, "mode": "independent", "rng": np.random.default_rng(0)}
+    _, dl_c = local_update_mech(net, k, l, xf, xn, 0.05, 1.0, 1.0, read_noise=common)
+    _, dl_i = local_update_mech(net, k, l, xf, xn, 0.05, 1.0, 1.0, read_noise=indep)
+    assert dl_c == pytest.approx(dl0, abs=1e-12)                 # symmetric springs: dl ∝ k(e_n - e_f)
+    assert np.linalg.norm(dl_i - dl0) > 10 * np.linalg.norm(dl0)  # the independent two-read noise swamps it

@@ -94,3 +94,18 @@ def test_verdict_b0_branches_in_order():
     assert verdict_b0(0.8, 1e-4, 1.0, 0.0, **ok)["status"] == "FORECLOSE-LEARNABILITY"
     assert verdict_b0(0.1, 1e-4, 1.0, 0.0, **ok)["status"] == "AMBIGUOUS"       # learns, misses baseline
     assert verdict_b0(1e-4, 1e-4, 1.0, 0.0, sign_match=0.5, rho=0.2)["status"] == "AMBIGUOUS"
+
+
+# --- verdict_b0_noise (read-noise mechanism) ------------------------------------------------------
+from tasks import verdict_b0_noise
+
+
+def test_verdict_b0_noise_branches():
+    inf = float("inf")
+    assert verdict_b0_noise({("independent", 0.05): 1e-4}, control_ok=False)["status"] == "UNTESTED"
+    w = {("independent", 0.05): 1e-4, ("common", 0.05): 1e-2, ("independent", 0.2): 1e-3, ("common", 0.2): inf}
+    assert verdict_b0_noise(w, True)["status"] == "H5-MECHANISM-CONFIRMED"
+    w_same = {("independent", 0.05): 1e-3, ("common", 0.05): 2e-3}
+    assert verdict_b0_noise(w_same, True)["status"] == "H5-MECHANISM-REFUTED"
+    w_amb = {("independent", 0.05): 1e-4, ("common", 0.05): 1e-2, ("independent", 0.2): 1e-5, ("common", 0.2): inf}
+    assert verdict_b0_noise(w_amb, True)["status"] == "AMBIGUOUS"   # wall does not grow with beta
