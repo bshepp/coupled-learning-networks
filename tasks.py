@@ -216,6 +216,8 @@ def verdict_b0_noise(walls, control_ok, min_gap=10.0, max_same=3.0):
     beta_scaling = len(betas) < 2 or all(ind[i] <= ind[i + 1] for i in range(len(betas) - 1))
     out["gaps_common_over_independent"] = gaps
     out["independent_wall_grows_with_beta"] = bool(beta_scaling)
+    # equal walls at every beta satisfy the (non-decreasing) scaling test trivially: say so
+    out["beta_scaling_resolved"] = len(set(ind)) > 1
     if all(g >= min_gap for g in gaps) and beta_scaling:
         out["status"] = "H5-MECHANISM-CONFIRMED"
     elif all(np.isfinite(g) and g <= max_same for g in gaps):

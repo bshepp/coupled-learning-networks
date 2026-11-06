@@ -104,7 +104,11 @@ def test_verdict_b0_noise_branches():
     inf = float("inf")
     assert verdict_b0_noise({("independent", 0.05): 1e-4}, control_ok=False)["status"] == "UNTESTED"
     w = {("independent", 0.05): 1e-4, ("common", 0.05): 1e-2, ("independent", 0.2): 1e-3, ("common", 0.2): inf}
-    assert verdict_b0_noise(w, True)["status"] == "H5-MECHANISM-CONFIRMED"
+    v = verdict_b0_noise(w, True)
+    assert v["status"] == "H5-MECHANISM-CONFIRMED" and v["beta_scaling_resolved"] is True
+    w_eq = {("independent", 0.05): 1e-3, ("common", 0.05): inf, ("independent", 0.2): 1e-3, ("common", 0.2): inf}
+    v_eq = verdict_b0_noise(w_eq, True)
+    assert v_eq["status"] == "H5-MECHANISM-CONFIRMED" and v_eq["beta_scaling_resolved"] is False
     w_same = {("independent", 0.05): 1e-3, ("common", 0.05): 2e-3}
     assert verdict_b0_noise(w_same, True)["status"] == "H5-MECHANISM-REFUTED"
     w_amb = {("independent", 0.05): 1e-4, ("common", 0.05): 1e-2, ("independent", 0.2): 1e-5, ("common", 0.2): inf}

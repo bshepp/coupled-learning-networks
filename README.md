@@ -15,6 +15,9 @@ the co-located ionic computing line. It contains two experiments in two media.
 | **A** | resistor / flow network (scalar potential) | allostery + regression | **PASS** — the physics computes the update |
 | **B** | 2D nonlinear spring network (signed displacements) | parity-3 | **FORECLOSE** — elastic state can't clear the wall |
 | **B2** (2026-11-05) | same lattice, offline representability re-probe | parity-3 | **FORECLOSE-REPRESENTABILITY-CONFIRMED** — B's foreclosure is not a budget/objective artifact |
+| **B0** (2026-11-06) | 2D spring network, local rule vs ceiling + matched GD | mechanical allostery: attenuate / amplify / invert | **PASS / MULTISTABILITY-FORECLOSE / PASS** — the rule learns at network scale (incl. a sign inversion); amplification drives the lattice into buckling, and so does offline GD |
+| **B0-noise** (2026-11-06) | same, read noise in the two bond reads | amplify | **H5-MECHANISM-CONFIRMED** — independent-read noise forecloses (by buckling) at σ = 1e-3, common-mode never |
+| **A2** (2026-11-06) | heterogeneous resistor net; Poiseuille law | β-law; A's tasks | **1 − ρ ∝ β^2.00**; Poiseuille **PASS** on both tasks |
 
 **Experiment A (PASS).** A passive resistor network, trained only by the local two-phase
 coupled-learning rule, reaches the offline optimizer's error on allostery and regression, and its
@@ -42,6 +45,18 @@ parity coefficient several-hundred-fold, but every optimum is **pinned on the bu
 38/38 solvable optima have negative separation. See `docs/superpowers/specs/2026-11-05-experiment-b2-findings.md`; the
 restart evaluation and ranked roadmap are in `2026-11-05-project-status-and-roadmap.md`.
 
+**Experiment B0 (2026-11-06).** The positive control B never ran: on *mechanical allostery* the local rule
+learns at network scale, 100 % physics-local — attenuation to ~1e-3 normalized error and a **sign inversion**
+of the allosteric response (which needs pre-stress / geometric nonlinearity) to ~5e-3, beating matched-budget
+offline GD by 30–100× on inversion. Amplification is learned to near the ceiling and then **the lattice
+buckles** (2 of 3 seeds, at epochs 54 and 4434) — and the offline GD baseline buckles at nearly the same
+epochs: amplifying a response means driving a stiffness toward zero, so loss descent on this medium marches
+toward the stability boundary. A read-noise sweep on the same task confirms the commons' H5 two-read
+fragility mechanism on an elastic substrate, with the tax paid as buckling rather than misdirection. See
+`docs/superpowers/specs/2026-11-06-experiment-b0-findings.md` and `2026-11-06-experiment-b0-noise-findings.md`.
+The Experiment C design (`2026-11-06-experiment-c-design.md`) proposes embracing bistability; its first
+blocker, a solver that finds minima through snaps, is `mechanical_solver.settle()`.
+
 **Why the keystones hold (commons lesson `gradient-flow-is-the-ep-license`).** Both substrates are genuine
 gradient flows — the resistor net minimizes a co-content, the spring net its elastic energy — which is
 what licenses the equilibrium-propagation guarantee that the local contrast *is* the gradient as β→0.
@@ -65,17 +80,20 @@ portfolio-wide reconciliation.)
 | `network.py` | Constitutive laws (resistor, Hagen–Poiseuille), `Network`, grid builder |
 | `coupled_learning.py` | The two-phase coupled-learning rule (scalar/voltage) |
 | `experiment_a.py` | Driver: train, compare to baseline, emit verdict + JSON |
+| `experiment_a2.py` | β-law on a heterogeneous net (1 − ρ ∝ β²) + the Hagen–Poiseuille law run as a headline |
 
 **Experiment B (elastic):**
 
 | File | Responsibility |
 |---|---|
 | `spring_network.py` | 2D spring energy/force/tangent-stiffness (smoothed tension–compression asymmetry) + triangulated builder |
-| `mechanical_solver.py` | Damped-Newton energy minimization + line-search guard + basin-jump detection |
+| `mechanical_solver.py` | Damped-Newton energy minimization + line-search guard + basin-jump detection; `settle()` (LM-damped, finds minima through snaps — Experiment C entry point) |
 | `mechanical_learning.py` | The two-phase mechanical rule (learns stiffness `k` and rest length `ℓ`) |
 | `experiment_b.py` | Crash-tolerant driver: train, baseline, five-way verdict + JSON (alignment certified at init; reports η/β) |
 | `parity_analysis.py` | Walsh decomposition of the 3-input readout: `parity_purity` (scale-free parity content) + its gradient |
 | `experiment_b2.py` | Offline representability re-probe: purity / MSE under L-BFGS-B, DE, saturation trace, `verdict_b2` |
+| `experiment_b0.py` | Mechanical allostery: local rule vs converged ceiling (`mech_ceiling`) and matched-budget GD; trajectory diagnostics; d-map; `verdict_b0` |
+| `experiment_b0_noise.py` | Read noise in the two bond reads (independent vs common-mode) × β; `verdict_b0_noise` (H5 mechanism) |
 
 **Shared:**
 
@@ -94,6 +112,9 @@ python -m pytest -q          # the full test suite (one module per source module
 python experiment_a.py       # Experiment A: prints a table + writes experiment_a_results.json
 python experiment_b.py       # Experiment B: prints a per-seed table + writes experiment_b_results.json (~1 min)
 python experiment_b2.py      # Experiment B2: offline representability re-probe + Walsh spectrum (~28 min)
+python experiment_b0.py      # Experiment B0: mechanical allostery, local rule vs ceiling + matched GD, d-map (~26 min)
+python experiment_b0_noise.py  # read-noise sweep on B0's amplify task (~14 min)
+python experiment_a2.py      # Experiment A2: beta-law + Poiseuille headline (~1 s)
 ```
 
 **Stack:** Python, numpy, scipy (L-BFGS-B / differential evolution in B2), pytest. The true gradients

@@ -108,15 +108,23 @@ means the claim was under-supported. **Experiment B2 (today) re-probes exactly t
    coefficient ×600 but every optimum is wall-pinned and 38/38 separations are negative. B's verdict
    stands on a budget-saturated, scale-free, two-optimizer probe. See
    `2026-11-05-experiment-b2-findings.md`.
-2. **Two-axis audit adoption.** Port `commons/audit.py`'s `Audit` (keep `AuditLog` as the shim so the
+2. **Two-axis audit adoption** — *done 2026-11-05* (`audit.py` projects onto the commons' axes behind the
+   existing API). Port `commons/audit.py`'s `Audit` (keep `AuditLog` as the shim so the
    smoke tests' `fraction_physics_local == 1.0` invariant is untouched), and tag headline updates
    `(physical, physical)`, baselines `(cpu, electronic)`. Small, mechanical, closes the open RECONCILE.
-3. **B's multistability leg: a monostable-regime learnability study.** The B design said a
+3. **B's multistability leg: a monostable-regime learnability study** — *done as Experiment B0,
+   2026-11-06*: attenuate PASS, invert PASS (a sign inversion, 100 % physics-local), amplify
+   MULTISTABILITY-FORECLOSE because loss descent itself drives the lattice into buckling (GD too); d-map:
+   stable at d_max ≤ 0.1, buckles within 1000 epochs at ≥ 0.2. Read-noise sweep (item 6) run on the same
+   task: H5-MECHANISM-CONFIRMED, tax paid as buckling. See the two 2026-11-06 findings docs.** The B design said a
    MULTISTABILITY-FORECLOSE "would motivate damped-dynamics relaxation or a monostable-regime study".
    With kernels 10× faster, sweep (d, pre-stress) with a jump-rate map and ask whether *any* region is
    both stable and learnable for a friendlier mechanical task (allostery-in-elastic) — this separates
    "the rule breaks" from "parity is hard" on the elastic medium.
-4. **Experiment C — fast/slow two-timescale elastic medium (H4).** *(B2 adds a second candidate C:
+4. **Experiment C** — *design draft written 2026-11-06* (`2026-11-06-experiment-c-design.md`); first
+   blocker (a minimum-finding solver through snaps) closed by `mechanical_solver.settle()`; the decisive
+   first-step number (two-phase alignment across a snap) is still to run. **Fast/slow two-timescale
+   elastic medium (H4).** *(B2 adds a second candidate C:
    elements bistable by design, with a rule that tolerates multistability — since B2 shows the
    parity-increasing direction IS the buckling direction, an escape on this medium must embrace
    bistability rather than avoid it.)* The commons' diagnosed next
@@ -124,10 +132,11 @@ means the claim was under-supported. **Experiment B2 (today) re-probes exactly t
    free-phase reference each step, a slow mode is the aged weight. Simulate it on the spring network;
    pre-register PASS/FORECLOSE on allostery first (friendly), parity later. This is the most novel open
    question `01` can own, and it feeds `07`'s hardware arm directly.
-5. **A — show the β tradeoff on a heterogeneous net; exercise the Poiseuille law.** Minor; A's findings
+5. **A — β tradeoff + Poiseuille** — *done as Experiment A2, 2026-11-06*: 1 − ρ ∝ β^2.00, Poiseuille PASS. Minor; A's findings
    flagged the β-dependence as barely visible, and `poiseuille_law` is implemented but never run in a
    headline. Cheap completeness items.
-6. **Read-noise on the elastic rule (H5 for B).** Only worth running if (3) or (4) finds a learnable
+6. **Read-noise on the elastic rule (H5 for B)** — *done 2026-11-06* (see item 3). Open: resolve the
+   β-scaling of the independent wall with a half-decade σ grid. Only worth running if (3) or (4) finds a learnable
    regime; a noise sweep on a foreclosed substrate is uninformative.
 
 ---
