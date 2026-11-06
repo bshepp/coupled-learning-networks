@@ -183,7 +183,30 @@ Levenberg–Marquardt minimizer (`settle()`), counts rescues separately, and **m
     basin selection — lowest-energy minima never separate (MULTISTABLE-HYSTERETIC). The pincer stands in
     measured form. Next: Experiment C Arm 1 (make basin selection the computation, or keep it out).
 
-## Files touched today
-`spring_network.py` (vectorized), `baselines.py` (`mech_readout_adjoint`, vectorized), `parity_analysis.py`
-(new), `experiment_b2.py` (new), `tasks.py` (`verdict_b2`), `experiment_b.py` (alignment at init, η/β),
-tests for each. Scratch outputs (`*_results.json`) remain gitignored.
+## Session log — what was done (2026-11-05 → 11-06), in order
+
+1. Reproduction audit (A exact; B reproduces; seed-1 knife-edge noted). Spring kernels vectorized (10–14×).
+2. **B2** — representability re-probe: FORECLOSE-REPRESENTABILITY-CONFIRMED (run 2; run 1 apparatus-limited).
+3. Two-axis audit projection; alignment certified at init; η/β reported.
+4. **B0** — mechanical allostery (the missing positive control): attenuate PASS, invert PASS, amplify
+   first read MULTISTABILITY-FORECLOSE …
+5. … whose diagnosis found the **cold-start solver artifact**. Seam fixed (warm start + `settle()` fallback,
+   saddle rejection, measured stability margin). Re-runs: **B → FORECLOSE-REPRESENTABILITY (jump 0.00)**,
+   **B0 amplify → AMBIGUOUS (2 PASS)**, **B2 verdict unchanged, "wall-pinned" withdrawn**, **noise sweep:
+   β-scaling resolved, drift not buckling**.
+6. **B3** — multistability measured: FORECLOSE-REPRESENTABILITY (d ≤ 0.2), MULTISTABLE-HYSTERETIC (d ≥ 0.3).
+7. **A2** — 1 − ρ ∝ β^2.00; Poiseuille PASS. **Read-noise** — H5-MECHANISM-CONFIRMED (+ noise-helps transient).
+8. **Experiment C** design draft; `settle()` built and shown to follow a snap with hysteresis.
+
+Every verdict change is recorded as an addendum beside the original numbers; nothing was overwritten.
+
+## Files touched (both days)
+Source: `spring_network.py` (vectorized), `mechanical_solver.py` (`min_eig`, `settle()`), `mechanical_learning.py`
+(continuous targets, trajectory diagnostics, read noise, robust free phase), `baselines.py`
+(`mech_readout_adjoint`, `mech_ceiling`, significant sign-match), `tasks.py` (`allostery_mech_task`,
+`verdict_b0/_b0_noise/_b2/_b3`, `verdict` abs_floor), `audit.py` (two-axis), `experiment_b.py` (init
+alignment, η/β, margin), new `parity_analysis.py`, `experiment_a2.py`, `experiment_b0.py`,
+`experiment_b0_noise.py`, `experiment_b2.py`, `experiment_b3.py`; one test module per source module (76 tests).
+Docs: this file; findings for A2, B0, B0-noise, B2, B3; addenda in B's findings; Experiment C design;
+README and CLAUDE.md. Scratch outputs (`*_results.json`) remain gitignored; run logs are in the session
+scratchpad only.
