@@ -131,3 +131,14 @@ def test_train_mech_tracks_the_stability_margin():
     res = train_mech(task, k0, l0, beta=0.05, eta_k=0.1, eta_l=0.1, epochs=5)
     assert len(res["min_eig_history"]) == 5 and all(v > 0 for v in res["min_eig_history"])
     assert res["rescues"] == 0
+
+
+def test_free_phase_never_returns_a_saddle():
+    from spring_network import SpringNetwork, dof
+    x0 = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]])
+    net = SpringNetwork(x0, [(0, 1), (1, 2)], pinned_dofs=[dof(0, 0), dof(0, 1), dof(2, 0), dof(2, 1)],
+                        input_dofs=[], output_dof=dof(1, 1))
+    k = np.array([1.0, 1.0]); l = np.array([1.1, 1.1])
+    # started exactly AT the saddle Newton "converges" immediately (zero force); the free phase must reject it
+    x, info = free_phase_mech(net, k, l, np.array([]), 1.0, x_init=x0.copy())
+    assert info["rescued"] is True and info["min_eig"] > 0 and abs(abs(x[1, 1]) - np.sqrt(1.1 ** 2 - 1)) < 1e-6

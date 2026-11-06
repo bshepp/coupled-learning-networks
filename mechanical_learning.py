@@ -45,6 +45,9 @@ def free_phase_mech(net, k, l, pattern, d, x_init=None, robust=True):
     try:
         x, info = relax_mech(net, k, l, clamp, x_init=x0)
         info["rescued"] = False
+        # Newton converges to ANY stationary point; a free phase must be a MINIMUM (measured)
+        if robust and info.get("min_eig", 1.0) < 0:
+            raise RuntimeError("stationary point is not a minimum")
         return x, info
     except RuntimeError:
         if not robust:
