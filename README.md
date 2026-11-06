@@ -13,8 +13,9 @@ the co-located ionic computing line. It contains two experiments in two media.
 | Experiment | Substrate | Task | Verdict |
 |---|---|---|---|
 | **A** | resistor / flow network (scalar potential) | allostery + regression | **PASS** — the physics computes the update |
-| **B** | 2D nonlinear spring network (signed displacements) | parity-3 | **FORECLOSE-REPRESENTABILITY** — elastic state can't represent parity-3 (2026-11-06 correction: the June "multistability" leg was a solver artifact) |
+| **B** | 2D nonlinear spring network (signed displacements) | parity-3 | **FORECLOSE-REPRESENTABILITY** at d = 0.1 (2026-11-06 correction: the June "multistability" leg was a solver artifact; see B3 for the measured version) |
 | **B2** (2026-11-05) | same lattice, offline representability re-probe | parity-3 | **FORECLOSE-REPRESENTABILITY-CONFIRMED** — B's foreclosure is not a budget/objective artifact |
+| **B3** (2026-11-06) | same lattice, parity-3 vs deformation, multistability *measured* (multi-start minima) | parity-3 | **FORECLOSE-REPRESENTABILITY (d ≤ 0.2) · MULTISTABLE-HYSTERETIC (d ≥ 0.3)** — the rule's readouts separate at d = 0.5 on 3/3 seeds, but only as basin selection; lowest-energy minima never separate |
 | **B0** (2026-11-06) | 2D spring network, local rule vs ceiling + matched GD | mechanical allostery: attenuate / amplify / invert | **PASS / AMBIGUOUS / PASS** — the rule learns at network scale (incl. a sign inversion), beats matched-budget GD in 7/9 cells, no instability |
 | **B0-noise** (2026-11-06) | same, read noise in the two bond reads | amplify | **H5-MECHANISM-CONFIRMED** — independent-read wall at σ = 1e-3 (β 0.05) / 1e-2 (β 0.2), common-mode never; noise-helps transient below the wall |
 | **A2** (2026-11-06) | heterogeneous resistor net; Poiseuille law | β-law; A's tasks | **1 − ρ ∝ β^2.00**; Poiseuille **PASS** on both tasks |
@@ -31,8 +32,13 @@ swept (deformation `d`, asymmetry `α`, network size, random inits → separatio
 2026 headline also reported a *multistability* leg (jump rates 0.19–0.26, "the two-phase rule becomes
 ill-defined where the lattice buckles"); that leg was a **solver artifact** — the free-phase Newton solve,
 cold-started from the reference geometry, failed its line search on pre-stressed lattices whose equilibria
-are unique and stable. Under the corrected seam every jump rate is 0.00 and the verdict is
-FORECLOSE-REPRESENTABILITY. The *mechanism* is sound — the keystone confirms the local rule equals the true
+are unique and stable. Under the corrected seam every jump rate is 0.00 and the verdict at d = 0.1 is
+FORECLOSE-REPRESENTABILITY. **Experiment B3** then measured multistability directly (multi-start minimization
+of each learned configuration) across d = 0.1–0.5: minima are unique at d ≤ 0.2 and parity is
+unrepresentable there; at d ≥ 0.3 each pattern has 2–5 minima, the local rule's own readouts separate
+parity-3 (all seeds at d = 0.5), and the separation vanishes when each pattern is placed in its lowest-energy
+minimum — a hysteretic basin selection, not a property of the lattice. Both halves of the June "pincer" are
+now data, in corrected form. The *mechanism* is sound — the keystone confirms the local rule equals the true
 gradient (ρ 1.0). → **The wall is deeper than passivity**; escalate to project `03` (energy-based/Ising).
 See `docs/superpowers/specs/2026-06-19-experiment-b-findings.md` (with its 2026-11-06 addendum).
 
@@ -96,6 +102,7 @@ portfolio-wide reconciliation.)
 | `experiment_b.py` | Crash-tolerant driver: train, baseline, five-way verdict + JSON (alignment certified at init; reports η/β) |
 | `parity_analysis.py` | Walsh decomposition of the 3-input readout: `parity_purity` (scale-free parity content) + its gradient |
 | `experiment_b2.py` | Offline representability re-probe: purity / MSE under L-BFGS-B, DE, saturation trace, `verdict_b2` |
+| `experiment_b3.py` | Parity-3 vs deformation with multistability measured: `validate()` (multi-start `settle()`, distinct minima, lowest-energy readout, min eigenvalue), `verdict_b3` |
 | `experiment_b0.py` | Mechanical allostery: local rule vs converged ceiling (`mech_ceiling`) and matched-budget GD; trajectory diagnostics; d-map; `verdict_b0` |
 | `experiment_b0_noise.py` | Read noise in the two bond reads (independent vs common-mode) × β; `verdict_b0_noise` (H5 mechanism) |
 
@@ -116,6 +123,7 @@ python -m pytest -q          # the full test suite (one module per source module
 python experiment_a.py       # Experiment A: prints a table + writes experiment_a_results.json
 python experiment_b.py       # Experiment B: prints a per-seed table + writes experiment_b_results.json (~1 min)
 python experiment_b2.py      # Experiment B2: offline representability re-probe + Walsh spectrum (~28 min)
+python experiment_b3.py      # Experiment B3: parity-3 vs deformation, multistability measured (~2 min)
 python experiment_b0.py      # Experiment B0: mechanical allostery, local rule vs ceiling + matched GD, d-map (~26 min)
 python experiment_b0_noise.py  # read-noise sweep on B0's amplify task (~14 min)
 python experiment_a2.py      # Experiment A2: beta-law + Poiseuille headline (~1 s)

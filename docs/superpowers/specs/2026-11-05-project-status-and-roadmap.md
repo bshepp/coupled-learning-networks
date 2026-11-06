@@ -119,8 +119,13 @@ Levenberg–Marquardt minimizer (`settle()`), counts rescues separately, and **m
   rates 32–47 % → 0 %, "wall-pinned" 1.00 → 0–0.10 (withdrawn); purity reached 0.70 and a₁₂₃ 1.5 with
   separation still negative — a representability wall, not an instability wall. Untrained lattice stable
   through d = 0.5.
-- **Lesson candidate for the commons:** a crash-tolerant solver seam must distinguish "the solver failed from
-  its start point" from "no stable equilibrium exists"; count only the latter as physics.
+- **Experiment B3 (new):** the multistability leg re-established with measured minima — hysteretic
+  separation at d ≥ 0.3, not a lattice property; FORECLOSE-REPRESENTABILITY at d ≤ 0.2.
+- **Lesson candidates for the commons:** (i) a crash-tolerant solver seam must distinguish "the solver failed
+  from its start point" from "no stable equilibrium exists"; count only the latter as physics, and *measure*
+  stability (smallest Hessian eigenvalue); (ii) validate any positive separation on a nonlinear substrate by
+  multi-start minimization — a trained trajectory's readouts are basin-dependent once the landscape is
+  multi-welled.
 
 ## Roadmap (ranked)
 
@@ -172,11 +177,11 @@ Levenberg–Marquardt minimizer (`settle()`), counts rescues separately, and **m
 9. **Read-noise follow-ups.** β-scaling is resolved (run 2). Open: the *noise-helps transient* — at σ = 1e-3
    the noisy trajectory's best error is ~100× below the clean run's; pre-register an annealed-σ run
    (commons `noise-as-resource`).
-10. **Experiment B's multistability question, done properly.** With the corrected seam and the measured
-    margin, sweep d upward on the parity lattice (B2's untrained probe shows the fold near d ≈ 0.5–0.7) and
-    ask whether genuine multistability (basin jumps between consecutive equilibria, settle() finding
-    different minima) ever appears in the regime where the parity channel is large — the question B's June
-    headline thought it had answered.
+10. **Experiment B's multistability question, done properly** — *done as Experiment B3, 2026-11-06*:
+    unique minima and FORECLOSE-REPRESENTABILITY at d ≤ 0.2; at d ≥ 0.3 the lattice is multi-welled (2–5
+    minima per pattern), the local rule's readouts separate parity-3 (3/3 seeds at d = 0.5) but only as
+    basin selection — lowest-energy minima never separate (MULTISTABLE-HYSTERETIC). The pincer stands in
+    measured form. Next: Experiment C Arm 1 (make basin selection the computation, or keep it out).
 
 ## Files touched today
 `spring_network.py` (vectorized), `baselines.py` (`mech_readout_adjoint`, vectorized), `parity_analysis.py`

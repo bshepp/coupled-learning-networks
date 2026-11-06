@@ -175,3 +175,13 @@ artifact, caught at the alignment step). Compare the June table: jump rates 0.19
 **What does not change.** The June table above is left as recorded (that is what the code of the day
 produced); this addendum is the correction. Observed numbers for the corrected seam are in
 `experiment_b_results.json` from the 2026-11-06 run and in `2026-11-06-experiment-b0-findings.md`.
+
+**Follow-up the same day (Experiment B3, `2026-11-06-experiment-b3-findings.md`).** With multistability
+*measured* (multi-start minimization of each learned configuration), the pincer is re-established in a
+corrected form: at d = 0.1–0.2 the minima are unique and parity-3 is unrepresentable
+(FORECLOSE-REPRESENTABILITY); at d = 0.3–0.5 the lattice has 2–5 minima per pattern, the local rule's own
+readouts separate parity-3 (all three seeds at d = 0.5), and re-evaluated at each pattern's lowest-energy
+minimum the separation is strongly negative (MULTISTABLE-HYSTERETIC) — the separation is basin selection
+along the trajectory, not a property of the lattice. Both halves of the June pincer are now data; the
+mechanism statement "the two-phase rule becomes ill-defined" is sharpened to "the readout becomes
+hysteretic".
