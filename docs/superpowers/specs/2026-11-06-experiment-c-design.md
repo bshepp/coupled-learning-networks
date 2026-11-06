@@ -120,12 +120,27 @@ part of the headline, since the whole point of the single-read medium is noise r
 - Arm 2's aging law must be derived from an energy so its alignment is licensed; a hand-written rule that
   "looks local" but anti-aligns is 07's trap.
 
-## 6. Cheapest first step (one session)
+## 6. Cheapest first step (one session) — partly done 2026-11-06
 
-Prototype a single von-Mises snap cell (3 nodes) inside `spring_network`, FD-gate its energy/force/Hessian,
-show `relax_mech` (or a damped variant) finds both minima from different starts, and measure rule 2's
-(symmetric nudge) alignment on a 3×3 lattice with one snap cell against the implicit adjoint — in-basin
-and across a snap. That single number (ρ across a snap) decides whether Arm 1 is worth a full plan.
+**No new constitutive law is needed for a snap element.** Two existing bonds meeting at an apex with
+rest length longer than the straight half-span (pre-compression, `ℓ = 1.1` on a unit half-span) *is* a
+von-Mises truss: the apex has two stable positions at `y = ±0.458` and a saddle at `y = 0`. Measured with
+the current `spring_network` / `relax_mech` (scratch probe, not committed as a module):
+
+| start | result |
+|---|---|
+| apex `y = ±0.30` | converges to `y = ±0.4583`, `H_ff` eigenvalues (0.347, 1.653) — two genuine wells |
+| apex `y = ±0.02` (near the saddle) | **`RuntimeError`: line search fails (indefinite tangent stiffness)** |
+| saddle `y = 0` | `H_ff` eigenvalues (−0.2, 2.0) |
+| quasi-static sweep of a soft driver pulling the apex up then down | from the lower well the solve **raises at the snap point** (driver y = 1.6) instead of landing in the upper well; on the way back the apex stays in the upper well (`+0.217` where it started at `−0.217`) — **hysteresis is real** |
+
+So the first blocker is exactly §5's: `relax_mech` is a Newton minimizer that *refuses* indefinite
+regions by design (B's crash-tolerance semantics), and Arm 1 needs a solver that **finds a minimum
+through a snap** — a damped Newton with Hessian modification (`H + μI` until positive definite, μ by
+Levenberg–Marquardt) or a trust-region step, kept as a *separate* entry point (`settle()`), so B's
+`relax_mech` guards stay untouched. Remaining first-step items: that solver; then rule 2's (symmetric
+nudge) alignment against the implicit adjoint on a 3×3 lattice with one snap cell, in-basin and across a
+snap. That single number (ρ across a snap) decides whether Arm 1 is worth a full plan.
 
 ## 7. References
 
