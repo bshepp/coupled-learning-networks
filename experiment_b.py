@@ -59,7 +59,12 @@ def run(config=None):
                               "jump_rate": local["jump_rate"],
                               "sign_match": align["sign_match"], "rho": align["rho"],
                               "sign_match_final": align_final["sign_match"],
-                              "rho_final": align_final["rho"]})
+                              "rho_final": align_final["rho"],
+                              # measured stability margin (smallest free-equilibrium eigenvalue) and
+                              # solver rescues -- instability is measured, not inferred from crashes
+                              "min_eig_final": local["min_eig_history"][-1],
+                              "min_eig_min": min(local["min_eig_history"]),
+                              "rescues": local["rescues"]})
         except RuntimeError as e:
             # Hard failure on one seed: record instability and continue with other seeds
             seeds_out.append({"seed": seed,
@@ -86,10 +91,11 @@ def run(config=None):
 def main():
     res = run()
     print(f"{'seed':>5}{'local_sep':>12}{'base_sep':>12}{'jump_rate':>10}{'sign@init':>10}{'rho@init':>9}"
-          f"{'rho@end':>9}")
+          f"{'rho@end':>9}{'minEig':>9}{'rescues':>8}")
     for s in res["seeds"]:
         print(f"{s['seed']:>5}{s['local_sep']:>12.4e}{s['baseline_sep']:>12.4e}"
-              f"{s['jump_rate']:>10.2f}{s['sign_match']:>10.2f}{s['rho']:>9.3f}{s.get('rho_final', float('nan')):>9.3f}")
+              f"{s['jump_rate']:>10.2f}{s['sign_match']:>10.2f}{s['rho']:>9.3f}{s.get('rho_final', float('nan')):>9.3f}"
+              f"{s.get('min_eig_min', float('nan')):>9.4f}{s.get('rescues', 0):>8}")
     print(f"\nVERDICT: {res['verdict']['status']}  (SNR={res['verdict']['snr']:.2f}, "
           f"physics-local={res['audit_fraction_physics_local']:.2f}, "
           f"eta/beta={res['effective_lr']['k']:.0f})")
