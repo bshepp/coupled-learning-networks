@@ -86,10 +86,13 @@ init, not at convergence** (commons pattern `alignment-certification`: at a loss
   the run. Smoke tests assert a *valid* verdict (one of the allowed statuses), **never a specific outcome** —
   the lone exception is `test_experiment_a.py` asserting regression PASSes (a friendly, representable task).
   Don't "fix" a test by making it assert the verdict you happened to get.
-- **Crash-tolerance is intentional in Experiment B.** Solver `RuntimeError` (singular/indefinite tangent
-  stiffness, failed line search) is a real physical event — buckling/multistability — and is *counted* as an
-  instability (jump rate), not masked. Catches are deliberately narrowed to `RuntimeError` so genuine bugs
-  still surface; keep them narrow.
+- **Crash-tolerance is intentional in Experiment B — but only AFTER the robust seam.** A Newton
+  `RuntimeError` from `relax_mech` can be a cold-start artifact (2026-11-06: a unique, stable equilibrium
+  that Newton could not reach from the reference geometry was being counted as buckling; this flipped B's
+  headline from MULTISTABILITY-FORECLOSE to FORECLOSE-REPRESENTABILITY). `free_phase_mech` therefore
+  warm-starts from the previous equilibrium and falls back to `settle()`; only a failure of `settle()` too is
+  a genuine instability and is *counted* (jump rate), not masked. Catches stay narrowed to `RuntimeError` so
+  real bugs surface. Never reintroduce a cold-start-only free phase.
 - **Offline ceilings must be budget-saturated and scale-free** before a FORECLOSE is recorded off them
   (commons `foreclosure-can-be-a-budget-artifact`); B2 is the template (saturation trace + scale-free
   objective + second optimizer class).
