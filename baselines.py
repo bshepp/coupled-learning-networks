@@ -66,13 +66,20 @@ def gd_baseline(net, params0, law, task, epochs, lr, p_min=1e-3, p_max=10.0, aud
     return {"params": params, "history": history, "final_error": task_error(out, task.targets)}
 
 
-def gradient_alignment(delta_local, neg_grad):
+def gradient_alignment(delta_local, neg_grad, sign_tol=1e-9):
+    """sign_match / rho / cosine between the local update and -grad L. sign_match counts every
+    component (the original metric); sign_match_significant excludes components whose |grad| is below
+    sign_tol * max|grad| -- on a symmetric lattice some edges have an exactly-zero gradient, and the sign
+    of a zero is noise, not misalignment (A2 found 2 of 12 such edges at init)."""
     a = np.asarray(delta_local, float)
     b = np.asarray(neg_grad, float)
     sign_match = float(np.mean(np.sign(a) == np.sign(b)))
+    sig = np.abs(b) > sign_tol * (np.abs(b).max() if b.size else 0.0)
+    sign_sig = float(np.mean(np.sign(a[sig]) == np.sign(b[sig]))) if sig.any() else sign_match
     rho = float(np.corrcoef(a, b)[0, 1]) if a.std() > 0 and b.std() > 0 else 0.0
     cosine = float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-12))
-    return {"sign_match": sign_match, "rho": rho, "cosine": cosine}
+    return {"sign_match": sign_match, "sign_match_significant": sign_sig, "n_significant": int(sig.sum()),
+            "rho": rho, "cosine": cosine}
 
 
 # --- Experiment B: implicit-adjoint gradient through the nonlinear equilibrium ---------------

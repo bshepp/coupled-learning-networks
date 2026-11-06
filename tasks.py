@@ -42,10 +42,13 @@ def allostery_task(rows=3, cols=3, ratio=0.5, n_samples=6, seed=1):
     return Task("allostery", net, V_src, Y)
 
 
-def verdict(local_error, baseline_error, sign_match, rho, tol=0.15, sm_thresh=0.95, rho_thresh=0.9):
+def verdict(local_error, baseline_error, sign_match, rho, tol=0.15, sm_thresh=0.95, rho_thresh=0.9,
+            abs_floor=0.0):
     """PASS: local rule reaches the offline baseline AND its update aligns with the true
-    gradient. FORECLOSE: local rule cannot reach the baseline. AMBIGUOUS: otherwise."""
-    learns = local_error <= baseline_error * (1.0 + tol)
+    gradient. FORECLOSE: local rule cannot reach the baseline. AMBIGUOUS: otherwise.
+    abs_floor (default 0 = Experiment A's original rule): a normalized MSE at or below it counts as
+    'reached' regardless of the ratio -- at machine zero (1e-29 vs 1e-31) a relative test is noise."""
+    learns = local_error <= max(baseline_error * (1.0 + tol), abs_floor)
     aligned = (sign_match >= sm_thresh) and (rho >= rho_thresh)
     if learns and aligned:
         status = "PASS"

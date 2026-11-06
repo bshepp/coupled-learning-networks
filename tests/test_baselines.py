@@ -44,3 +44,13 @@ def test_gradient_alignment_extremes():
     assert opp["sign_match"] == pytest.approx(0.0)
     assert opp["cosine"] == pytest.approx(-1.0)
     assert opp["rho"] == pytest.approx(-1.0)
+
+
+def test_gradient_alignment_significant_sign_match_ignores_exactly_zero_gradient_components():
+    import numpy as np
+    from baselines import gradient_alignment
+    grad = np.array([1.0, -2.0, 0.0, 3.0])            # one exactly-zero component (lattice symmetry)
+    upd = np.array([0.9, -2.1, -1e-6, 2.8])           # the update there is O(beta) noise of either sign
+    a = gradient_alignment(upd, grad)
+    assert a["sign_match"] == 0.75 and a["sign_match_significant"] == 1.0 and a["n_significant"] == 3
+    assert gradient_alignment(upd, grad, sign_tol=0.0)["sign_match"] == 0.75   # the original metric is kept
