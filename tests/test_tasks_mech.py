@@ -67,3 +67,27 @@ def test_verdict_b2_confirmed_foreclose_requires_saturation_and_stability():
     rows_unsat = [_row(0.05, -0.1, -0.05, sat=0.1)]
     assert verdict_b2(rows_unsat)["status"] == "AMBIGUOUS"          # budget not saturated
     assert verdict_b2([_row(0.3, -0.1, -0.05, unstable=0.9)])["status"] == "AMBIGUOUS"  # nothing stable
+
+
+# --- Experiment B0: mechanical allostery task + verdict_b0 --------------------------------------
+from tasks import allostery_mech_task, verdict_b0
+
+
+def test_allostery_mech_task_structure():
+    t = allostery_mech_task(4, 4, d_max=0.1, ratio=0.5, n_samples=6)
+    assert t["patterns"].shape == (6, 1) and t["targets"].shape == (6,)
+    assert np.all(t["patterns"] > 0) and np.all(t["patterns"] <= 0.1)
+    assert t["targets"] == pytest.approx(0.5 * t["patterns"][:, 0])
+    assert t["labels"] is None and t["d"] == 1.0
+    assert len(t["net"].input_dofs) == 1 and len(t["net"].pinned_dofs) == 3
+
+
+def test_verdict_b0_branches_in_order():
+    ok = dict(sign_match=1.0, rho=1.0)
+    assert verdict_b0(1e-4, 1e-4, 1.0, 0.0, **ok)["status"] == "PASS"
+    assert verdict_b0(5e-4, 1e-9, 1.0, 0.0, **ok)["status"] == "PASS"          # abs_floor saves a tiny baseline
+    assert verdict_b0(1e-4, 1e-4, 1.0, 0.5, **ok)["status"] == "MULTISTABILITY-FORECLOSE"
+    assert verdict_b0(1e-4, 0.5, 1.0, 0.0, **ok)["status"] == "FORECLOSE-REPRESENTABILITY"
+    assert verdict_b0(0.8, 1e-4, 1.0, 0.0, **ok)["status"] == "FORECLOSE-LEARNABILITY"
+    assert verdict_b0(0.1, 1e-4, 1.0, 0.0, **ok)["status"] == "AMBIGUOUS"       # learns, misses baseline
+    assert verdict_b0(1e-4, 1e-4, 1.0, 0.0, sign_match=0.5, rho=0.2)["status"] == "AMBIGUOUS"

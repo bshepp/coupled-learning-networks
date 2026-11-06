@@ -52,3 +52,18 @@ def test_gd_baseline_reduces_loss():
             "target_pos": 0.1, "target_neg": -0.1}
     res = gd_baseline_mech(task, k0, l0, epochs=120, lr=1.0)
     assert res["sep"] > 0.05      # the offline optimizer genuinely separates the two classes
+
+
+def test_mech_ceiling_beats_short_gd_on_allostery_and_is_offline():
+    from tasks import allostery_mech_task
+    from baselines import mech_ceiling
+    from audit import AuditLog, OFFLINE_GRADIENT
+    task = allostery_mech_task(3, 3, d_max=0.1, ratio=1.2, n_samples=4)   # ~3x the untrained ratio
+    net = task["net"]
+    k0 = np.ones(len(net.edges)); l0 = default_rest_lengths(net)
+    audit = AuditLog()
+    ceil = mech_ceiling(task, k0, l0, maxiter=200, audit=audit)
+    gd = gd_baseline_mech(task, k0, l0, epochs=20, lr=0.5)
+    assert ceil["final_error"] < 0.5 * gd["final_error"]           # a converged ceiling, not a budget artifact
+    assert ceil["final_error"] < 0.1
+    assert audit.summary()["counts"] == {OFFLINE_GRADIENT: audit.summary()["total"]}

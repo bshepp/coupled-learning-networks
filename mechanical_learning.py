@@ -7,8 +7,16 @@ a weight."""
 import numpy as np
 from spring_network import bond_extensions, m, dm
 from mechanical_solver import relax_mech, basin_jump
-from tasks import two_sided_separation
+from tasks import two_sided_separation, task_error
 from audit import PHYSICS_LOCAL
+
+
+def task_targets(task):
+    """Per-pattern targets: explicit task["targets"] (continuous tasks, e.g. allostery) or the two
+    class targets selected by task["labels"] (classification tasks, e.g. parity)."""
+    if task.get("targets") is not None:
+        return np.asarray(task["targets"], float)
+    return np.where(np.asarray(task["labels"]) > 0, task["target_pos"], task["target_neg"])
 
 
 def _input_clamp(net, pattern, d):
@@ -53,10 +61,11 @@ def local_update_mech(net, k, l, x_free, x_nudged, beta, eta_k, eta_l, audit=Non
 
 def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
                k_min=1e-2, k_max=1e2, l_min=0.1, l_max=5.0, audit=None):
-    net, patterns, labels, d = task["net"], task["patterns"], task["labels"], task["d"]
-    targets = np.where(labels > 0, task["target_pos"], task["target_neg"])
+    net, patterns, d = task["net"], task["patterns"], task["d"]
+    labels = task.get("labels")
+    targets = task_targets(task)
     k = np.array(k0, float); l = np.array(l0, float)
-    sep_history = []
+    sep_history = []; error_history = []
     jumps = 0; trials = 0
     readouts = np.zeros(len(patterns))
     for _ in range(epochs):
@@ -76,6 +85,9 @@ def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
                 jumps += 1; trials += 1
         k = np.clip(k + dk / len(patterns), k_min, k_max)
         l = np.clip(l + dl / len(patterns), l_min, l_max)
-        sep_history.append(two_sided_separation(readouts, labels))
-    return {"k": k, "l": l, "sep_history": sep_history,
+        if labels is not None:
+            sep_history.append(two_sided_separation(readouts, labels))
+        error_history.append(task_error(readouts, targets))
+    return {"k": k, "l": l, "sep_history": sep_history, "error_history": error_history,
+            "final_error": error_history[-1] if error_history else float("nan"),
             "jump_rate": jumps / max(trials, 1), "readouts": readouts}

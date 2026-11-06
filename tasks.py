@@ -80,6 +80,51 @@ def parity3_mech_task(rows=4, cols=4, d=0.3, seed=0):
             "target_pos": +0.5 * d, "target_neg": -0.5 * d}
 
 
+def allostery_mech_task(rows=4, cols=4, d_max=0.1, ratio=0.5, n_samples=6, seed=0):
+    """Mechanical allostery (Rocks et al. 2017 idiom): ONE input node on the bottom row is displaced
+    in y by amplitudes u in d_max*U[0.3, 1]; the task is a prescribed transfer ratio at the distant
+    output node (top-right, y): target = ratio * u. Patterns are the amplitudes themselves (d = 1), so
+    the same train_mech / baseline machinery applies with continuous targets. The bottom-left node is
+    pinned fully and the bottom-right node in y (3 rigid-body DOFs removed; the bottom edge is held)."""
+    x0, edges = triangulated_lattice(rows, cols)
+    in_node = 0 * cols + (cols // 2)
+    out_node = (rows - 1) * cols + (cols - 1)
+    pinned_dofs = [dof(0, 0), dof(0, 1), dof(cols - 1, 1)]
+    net = SpringNetwork(x0, edges, pinned_dofs=pinned_dofs, input_dofs=[dof(in_node, 1)],
+                        output_dof=dof(out_node, 1))
+    rng = np.random.default_rng(seed)
+    u = d_max * rng.uniform(0.3, 1.0, size=(n_samples, 1))
+    return {"net": net, "patterns": u, "labels": None, "targets": ratio * u[:, 0], "d": 1.0,
+            "d_max": d_max, "ratio": ratio}
+
+
+def verdict_b0(local_error, baseline_error, untrained_error, jump_rate, sign_match, rho,
+               tol=0.15, abs_floor=1e-3, rep_max=0.1, jump_max=0.2, sm_min=0.9, rho_min=0.8):
+    """Pre-registered verdict for Experiment B0 (does the mechanical local rule LEARN a representable
+    task on the elastic medium?). Evaluated in order:
+      MULTISTABILITY-FORECLOSE   jump_rate > jump_max (the two-phase rule is ill-defined here)
+      FORECLOSE-REPRESENTABILITY the offline optimizer cannot bring normalized MSE below rep_max
+      PASS                       local error <= max(baseline*(1+tol), abs_floor) AND init alignment holds
+      FORECLOSE-LEARNABILITY     representable, but the local rule does not even halve the untrained error
+      AMBIGUOUS                  otherwise (learns but misses the baseline, or weak alignment)."""
+    out = {"local_error": float(local_error), "baseline_error": float(baseline_error),
+           "untrained_error": float(untrained_error), "jump_rate": float(jump_rate),
+           "sign_match": float(sign_match), "rho": float(rho)}
+    learns = local_error <= max(baseline_error * (1.0 + tol), abs_floor)
+    aligned = sign_match >= sm_min and rho >= rho_min
+    if jump_rate > jump_max:
+        out["status"] = "MULTISTABILITY-FORECLOSE"
+    elif not (baseline_error <= rep_max):
+        out["status"] = "FORECLOSE-REPRESENTABILITY"
+    elif learns and aligned:
+        out["status"] = "PASS"
+    elif local_error > 0.5 * untrained_error:
+        out["status"] = "FORECLOSE-LEARNABILITY"
+    else:
+        out["status"] = "AMBIGUOUS"
+    return out
+
+
 def two_sided_separation(r, y):
     """Separable in EITHER polarity: max(min(+)-max(-), min(-)-max(+)). >0 iff a threshold splits
     the classes; <=0 iff they overlap. (Ported idiom from self-assembly/stage1_network.py.)"""

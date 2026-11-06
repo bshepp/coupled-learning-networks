@@ -119,12 +119,72 @@ def mech_adjoint_gradient(net, k, l, patterns, d, targets):
     return mech_readout_adjoint(net, k, l, patterns, d, (r - np.asarray(targets, float)) / P)
 
 
-def gd_baseline_mech(task, k0, l0, epochs, lr, k_min=1e-2, k_max=1e2, l_min=0.1, l_max=5.0, audit=None):
-    from mechanical_learning import free_phase_mech, readout
+def mech_ceiling(task, k0, l0, maxiter=2000, max_restarts=8, k_min=1e-2, k_max=1e2, l_min=0.1, l_max=5.0,
+                 barrier=10.0, audit=None):
+    """REPRESENTABILITY ceiling for a mechanical task: L-BFGS-B on the implicit adjoint of the per-pattern
+    target MSE, run to convergence (restarting from the best solvable point when a line search aborts at
+    the stability wall). This is the budget-saturated "can THIS substrate express it?" number the
+    commons' foreclosure-can-be-a-budget-artifact lesson requires beside any plain-GD baseline. Failed
+    equilibrium solves return a quadratic barrier back to the last solvable point. OFFLINE_GRADIENT."""
+    from scipy.optimize import minimize
+    from mechanical_learning import free_phase_mech, readout, task_targets
     from audit import OFFLINE_GRADIENT
-    from tasks import two_sided_separation
-    net, patterns, labels, d = task["net"], task["patterns"], task["labels"], task["d"]
-    targets = np.where(labels > 0, task["target_pos"], task["target_neg"])
+    from tasks import task_error
+    net, patterns, d = task["net"], task["patterns"], task["d"]
+    targets = task_targets(task); P = len(patterns); E = len(net.edges)
+    state = {"last_ok": None, "best": None, "n_fail": 0, "n_eval": 0}
+
+    def f(theta):
+        k, l = theta[:E], theta[E:]
+        state["n_eval"] += 1
+        try:
+            xs = [free_phase_mech(net, k, l, patterns[p], d)[0] for p in range(P)]
+            r = np.array([readout(net, x) for x in xs])
+            gk, gl = mech_readout_adjoint(net, k, l, patterns, d, (r - targets) / P, xs=xs)
+        except RuntimeError:
+            state["n_fail"] += 1
+            if state["last_ok"] is None:
+                return 1e3, np.zeros_like(theta)
+            t_ok, L_ok = state["last_ok"]; dt = theta - t_ok
+            return L_ok + barrier * float(dt @ dt) + 1e-3, 2.0 * barrier * dt
+        if audit is not None:
+            audit.record(OFFLINE_GRADIENT, 2 * E)
+        L = 0.5 * float(np.mean((r - targets) ** 2))
+        state["last_ok"] = (theta.copy(), L)
+        if state["best"] is None or L < state["best"][0]:
+            state["best"] = (L, theta.copy())
+        return L, np.concatenate([gk, gl])
+
+    x = np.concatenate([np.asarray(k0, float), np.asarray(l0, float)])
+    bounds = [(k_min, k_max)] * E + [(l_min, l_max)] * E
+    nit = 0; converged = False; restarts = 0
+    while nit < maxiter and restarts <= max_restarts:
+        res = minimize(f, x, jac=True, method="L-BFGS-B", bounds=bounds,
+                       options={"maxiter": maxiter - nit, "maxfun": 4 * (maxiter - nit)})
+        nit += int(res.nit)
+        if str(res.message).startswith("CONVERGENCE"):
+            converged = True; break
+        restarts += 1
+        if state["best"] is None:
+            break
+        x = state["best"][1].copy()
+    if state["best"] is None:
+        return {"k": np.asarray(k0, float), "l": np.asarray(l0, float), "final_error": float("inf"),
+                "converged": False, "nit": nit, "restarts": restarts, "eval_fail_rate": 1.0}
+    theta = state["best"][1]; k, l = theta[:E], theta[E:]
+    r = np.array([readout(net, free_phase_mech(net, k, l, patterns[p], d)[0]) for p in range(P)])
+    return {"k": k, "l": l, "final_error": task_error(r, targets), "readouts": r,
+            "converged": converged, "nit": nit, "restarts": restarts,
+            "eval_fail_rate": state["n_fail"] / max(state["n_eval"], 1)}
+
+
+def gd_baseline_mech(task, k0, l0, epochs, lr, k_min=1e-2, k_max=1e2, l_min=0.1, l_max=5.0, audit=None):
+    from mechanical_learning import free_phase_mech, readout, task_targets
+    from audit import OFFLINE_GRADIENT
+    from tasks import two_sided_separation, task_error
+    net, patterns, d = task["net"], task["patterns"], task["d"]
+    labels = task.get("labels")
+    targets = task_targets(task)
     k = np.array(k0, float); l = np.array(l0, float)
     readouts = None
     for _ in range(epochs):
@@ -140,9 +200,10 @@ def gd_baseline_mech(task, k0, l0, epochs, lr, k_min=1e-2, k_max=1e2, l_min=0.1,
     try:
         readouts = np.array([readout(net, free_phase_mech(net, k, l, patterns[p], d)[0])
                              for p in range(len(patterns))])
-        sep = two_sided_separation(readouts, labels)
+        sep = two_sided_separation(readouts, labels) if labels is not None else float("nan")
+        err = task_error(readouts, targets)
     except RuntimeError:
         # Any pattern's final solve fails → baseline could not be evaluated (instability)
         readouts = np.zeros(len(patterns))
-        sep = float("-inf")
-    return {"k": k, "l": l, "sep": sep, "readouts": readouts}
+        sep = float("-inf"); err = float("inf")
+    return {"k": k, "l": l, "sep": sep, "final_error": err, "readouts": readouts}
