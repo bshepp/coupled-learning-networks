@@ -148,8 +148,9 @@ Levenberg–Marquardt minimizer (`settle()`), counts rescues separately, and **m
    both stable and learnable for a friendlier mechanical task (allostery-in-elastic) — this separates
    "the rule breaks" from "parity is hard" on the elastic medium.
 4. **Experiment C** — *design draft written 2026-11-06* (`2026-11-06-experiment-c-design.md`); first
-   blocker (a minimum-finding solver through snaps) closed by `mechanical_solver.settle()`; the decisive
-   first-step number (two-phase alignment across a snap) is still to run. **Fast/slow two-timescale
+   blocker closed by `mechanical_solver.settle()`; **first-step measurement done 2026-11-08**: on a 4-node
+   snap device the two-phase rule learns a bistable switch by folding the wrong well away and snapping the
+   state to the right one (ρ ≈ 1 in both wells, ~0.5 near the fold). Arm 1 is worth a full plan. **Fast/slow two-timescale
    elastic medium (H4).** *(B2 adds a second candidate C:
    elements bistable by design, with a rule that tolerates multistability — since B2 shows the
    parity-increasing direction IS the buckling direction, an escape on this medium must embrace

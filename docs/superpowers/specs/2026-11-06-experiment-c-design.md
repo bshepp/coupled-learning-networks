@@ -142,9 +142,29 @@ Levenberg–Marquardt) or a trust-region step, kept as a *separate* entry point 
 with saddle escape, tested on the snap cell (lands in a well from near the saddle, escapes from exactly
 the saddle, agrees with Newton in-basin). With it the quasi-static driver sweep follows the snap in both
 directions: up-snap at driver y = 1.6, down-snap at y = 1.4 — a hysteresis loop of width 0.2 in the drive,
-apex jumping between ≈ ±0.3. Remaining first-step item: rule 2's (symmetric nudge) alignment against the
-implicit adjoint on a 3×3 lattice with one snap cell, in-basin and across a snap. That single number
-(ρ across a snap) decides whether Arm 1 is worth a full plan.
+apex jumping between ≈ ±0.3.
+
+**First-step measurement — done 2026-11-08 (scratch probe on the 4-node snap device; not yet a module).**
+Task: a *bistable switch* — input A = driver y 1.5 (inside the hysteresis loop, so the apex is genuinely
+bistable at init), input B = driver y 1.1 (unique lower well); targets: A → upper well (y = +0.3), B → lower
+well (y = −0.3). The reference geometry is set so cold starts put A in the **wrong** (lower) well at init
+(y = −0.217, stability margin 0.097). Trainable: the three bonds' k and ℓ; rule 1 (B's warm-started
+two-phase rule with the corrected seam), β = 0.05.
+
+| η | what happened | ρ(local update, −∇L) |
+|---|---|---|
+| 1.0 | epoch 0→1: ℓ of the bars 1.10 → 1.02, driver bond k 0.15 → 0.205, A's lower well **folds away and the state snaps** to the upper branch (y −0.217 → +0.060); in-basin learning then reaches both targets to 1e-6 by epoch 100; 0 rescues | 0.995 before the snap; 0.998, 0.999, 1.000 at epochs 1–3 after it |
+| 0.1 | the snap still happens at epochs 1–2 (y −0.147 → +0.150): the wrong well is shallow enough that a 10× smaller step folds it; targets reached to 3e-4 by epoch 600 | 0.995 before; **0.50 → 0.84 over epochs 5–120** while the apex sits near the fold (strongly nonlinear response at finite β), rising to 0.97 by epoch 600 as it moves away |
+
+So: **the two-phase rule crosses a snap on its own** — in-basin descent on the wrong branch deforms the
+landscape until that branch's well disappears, the state falls into the correct well, and learning completes
+there. Alignment is ≈ 1 in both wells away from the fold and degrades (to ~0.5) only in the strongly
+nonlinear neighbourhood of the fold; the adjoint itself is singular at the fold, so no local rule can be
+"aligned" there — the rule's step stays finite and useful. The rescue counter at η = 0.1 (≈ 1 per epoch after
+the snap) shows Newton's warm start repeatedly landing on a non-minimum of the shallow geometry; `settle()`
+handled every one. **Verdict on the first step: Arm 1 is worth a full plan.** The open design question moves
+from "can the rule survive a snap" (yes, on this device) to "can snap-selection be made input-determined
+rather than history-determined on a lattice" — the question B3 posed from the other side.
 
 ## 7. References
 
