@@ -176,9 +176,9 @@ Levenberg–Marquardt minimizer (`settle()`), counts rescues separately, and **m
    so matched GD at lr 1 was at its edge and spikes; the finite-β update turns away from the raw gradient
    along the trajectory (cosine 0.65, magnitude 0.28×) and never spikes — an implicitly damped step on stiff
    directions. Open: does it generalize (other tasks, the resistor net)?
-9. **Read-noise follow-ups.** β-scaling is resolved (run 2). Open: the *noise-helps transient* — at σ = 1e-3
-   the noisy trajectory's best error is ~100× below the clean run's; pre-register an annealed-σ run
-   (commons `noise-as-resource`).
+9. **Read-noise follow-ups** — *annealed run done 2026-11-08*: NOISE-HELPS at β = 0.05 (anneal from 10× the
+   contrast: final error 4–8× below clean on every seed; constant noise 20× worse), NOISE-HURTS at β = 0.2
+   (anneal from 27× the contrast). Open: anneal from a fixed multiple of the measured contrast; schedule sweep.
 10. **Experiment B's multistability question, done properly** — *done as Experiment B3, 2026-11-06*:
     unique minima and FORECLOSE-REPRESENTABILITY at d ≤ 0.2; at d ≥ 0.3 the lattice is multi-welled (2–5
     minima per pattern), the local rule's readouts separate parity-3 (3/3 seeds at d = 0.5) but only as
@@ -200,6 +200,11 @@ Levenberg–Marquardt minimizer (`settle()`), counts rescues separately, and **m
 7. **A2** — 1 − ρ ∝ β^2.00; Poiseuille PASS. **Read-noise** — H5-MECHANISM-CONFIRMED (+ noise-helps transient).
 8. **Experiment C** design draft; `settle()` built and shown to follow a snap with hysteresis.
 
+9. (2026-11-08) **Conditioning follow-up**: GD's stability bound 0.96 vs η = 1; the finite-β update is an
+   implicitly damped step on stiff directions (B0); on A's linear net the local edge is a 1.7–2× step-scale
+   effect instead. **Annealed read noise**: NOISE-HELPS at β 0.05 (4–8× below clean), HURTS at β 0.2.
+   **Experiment C first step**: the two-phase rule learns a bistable switch through a snap on a 4-node device.
+
 Every verdict change is recorded as an addendum beside the original numbers; nothing was overwritten.
 
 ## Files touched (both days)
@@ -208,7 +213,8 @@ Source: `spring_network.py` (vectorized), `mechanical_solver.py` (`min_eig`, `se
 (`mech_readout_adjoint`, `mech_ceiling`, significant sign-match), `tasks.py` (`allostery_mech_task`,
 `verdict_b0/_b0_noise/_b2/_b3`, `verdict` abs_floor), `audit.py` (two-axis), `experiment_b.py` (init
 alignment, η/β, margin), new `parity_analysis.py`, `experiment_a2.py`, `experiment_b0.py`,
-`experiment_b0_noise.py`, `experiment_b2.py`, `experiment_b3.py`; one test module per source module (76 tests).
+`experiment_b0_noise.py`, `experiment_b0_anneal.py`, `experiment_b2.py`, `experiment_b3.py`; one test module per
+source module (79 tests).
 Docs: this file; findings for A2, B0, B0-noise, B2, B3; addenda in B's findings; Experiment C design;
 README and CLAUDE.md. Scratch outputs (`*_results.json`) remain gitignored; run logs are in the session
 scratchpad only.

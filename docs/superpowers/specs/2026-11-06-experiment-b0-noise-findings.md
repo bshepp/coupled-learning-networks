@@ -92,5 +92,34 @@ projects' (metric-dependent walls); what transfers is the *side* (fragile), the 
 route (`hardware-paths` Route B / H4) the requirement is a single-read or in-fabric-reference rule, with a
 read-noise budget of order the per-bond nudge contrast.
 
+---
+
+## Annealed follow-up (2026-11-08, `python experiment_b0_anneal.py`, 343 s) — the noise-helps transient, tested
+
+**Pre-registered** (`tasks.verdict_b0_anneal`): three arms per (β, seed) on the amplify task, 2000 epochs,
+η = 1, seeds 0–2: *clean* (σ = 0), *constant* σ at that β's independent-read wall, *annealed* σ falling
+linearly from that wall to zero over the run. NOISE-HELPS if the median annealed final error ≤ 0.5 × clean
+(and below constant); NEUTRAL within 2×; HURTS otherwise.
+
+| β | σ₀ (wall) | σ₀ / median contrast | clean final (s0/s1/s2) | constant final | **annealed final** | annealed best (epoch) | verdict |
+|---|---|---|---|---|---|---|---|
+| 0.05 | 1e-3 | ≈ 11× | 1.69e-2 / 6.48e-3 / 2.25e-2 | 2.99e-2 / 3.39e-1 / 8.81e-1 | **2.06e-3 / 9.72e-4 / 6.08e-3** | 2.5e-4 (804) / 6.6e-4 (1546) / 6.1e-3 (1999) | **NOISE-HELPS** (median 8.2× below clean) |
+| 0.20 | 1e-2 | ≈ 27× | 1.65e-2 / 6.32e-3 / 2.16e-2 | 5.24 / 1.20 / 2.73 | 4.64e-2 / 1.13e-2 / 7.25e-2 | 1.9e-2 (33) / 4.2e-4 (670) / 7.0e-3 (557) | **NOISE-HURTS** (median 2.8× above clean) |
+
+Stability margins at the end of the annealed runs are positive but smaller than the clean runs' (0.0013 –
+0.020 vs 0.022 – 0.031); the tail instability rate is 0.00 – 0.05 (a few basin-jump flags at β = 0.2).
+
+**Interpretation.** Annealed independent read noise is a **resource** on the elastic two-read rule when its
+starting amplitude is of order ten times the per-bond contrast: every β = 0.05 seed ends 4–8× below the
+clean run at the same budget, and the constant-noise arm (which ends 2–50× *above* clean) shows that the
+gain is the anneal's, not the noise's per se — the commons' `noise-as-resource` pattern (`03`: a gentle
+anneal turns the tax into help) reproduced on a mechanical substrate, and the first *positive* use of read
+noise in the two-read family. At β = 0.2 the wall sits at ≈ 27× the contrast; starting the anneal there
+throws the early trajectory too far (best errors reached at epochs 33–670, then partial recovery) and the
+run ends worse than clean. The operative variable is therefore σ₀ relative to the contrast, not relative to
+the wall; the natural follow-up is an anneal from a fixed multiple (~10×) of the measured contrast at each
+β, and a schedule sweep (linear vs exponential, anneal length < run length). Three seeds, one task; the
+verdict is pre-registered and split by β as reported.
+
 **Caveats.** Two seeds, one task, one lattice, decade σ grid, 2000 epochs; "realistic" σ for a printed or
 compliant lattice is unknown — in these units 1e-3 is a millistrain-scale readout error on a unit spacing.

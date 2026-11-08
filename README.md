@@ -18,6 +18,7 @@ the co-located ionic computing line. It contains two experiments in two media.
 | **B3** (2026-11-06) | same lattice, parity-3 vs deformation, multistability *measured* (multi-start minima) | parity-3 | **FORECLOSE-REPRESENTABILITY (d ≤ 0.2) · MULTISTABLE-HYSTERETIC (d ≥ 0.3)** — the rule's readouts separate at d = 0.5 on 3/3 seeds, but only as basin selection; lowest-energy minima never separate |
 | **B0** (2026-11-06) | 2D spring network, local rule vs ceiling + matched GD | mechanical allostery: attenuate / amplify / invert | **PASS / AMBIGUOUS / PASS** — the rule learns at network scale (incl. a sign inversion), beats matched-budget GD in 7/9 cells, no instability |
 | **B0-noise** (2026-11-06) | same, read noise in the two bond reads | amplify | **H5-MECHANISM-CONFIRMED** — independent-read wall at σ = 1e-3 (β 0.05) / 1e-2 (β 0.2), common-mode never; noise-helps transient below the wall |
+| **B0-anneal** (2026-11-08) | same, read noise annealed to zero | amplify | **NOISE-HELPS at β 0.05** (annealed final 4–8× below clean, every seed) · **NOISE-HURTS at β 0.2** (anneal started at 27× the signal) |
 | **A2** (2026-11-06) | heterogeneous resistor net; Poiseuille law | β-law; A's tasks | **1 − ρ ∝ β^2.00**; Poiseuille **PASS** on both tasks |
 
 **Experiment A (PASS).** A passive resistor network, trained only by the local two-phase
@@ -59,8 +60,9 @@ learns at network scale, 100 % physics-local — attenuation to ~1e-3 normalized
 5e-5 – 3e-3, and a **sign inversion** of the allosteric response (which needs pre-stress / geometric
 nonlinearity) to ~5e-3 — beating matched-budget offline GD in 7 of 9 cells (30–100× on inversion) with no
 instability at any deformation probed. A read-noise sweep on the same task confirms the commons' H5
-two-read fragility mechanism on an elastic substrate, with the independent-read wall scaling with β and a
-noise-helps transient below it. B0 also exposed the cold-start solver artifact that had produced B's
+two-read fragility mechanism on an elastic substrate, with the independent-read wall scaling with β — and an
+**annealed** read noise of ~10× the per-bond contrast ends 4–8× *below* the clean run (commons
+`noise-as-resource`, first positive use of read noise in the two-read family). B0 also exposed the cold-start solver artifact that had produced B's
 "multistability" and B0's own first-run "buckling"; the seam now warm-starts and falls back to a damped
 minimizer (`settle()`), and stability is *measured* (smallest tangent-stiffness eigenvalue) rather than
 inferred from crashes. See `docs/superpowers/specs/2026-11-06-experiment-b0-findings.md` and
@@ -105,6 +107,7 @@ portfolio-wide reconciliation.)
 | `experiment_b3.py` | Parity-3 vs deformation with multistability measured: `validate()` (multi-start `settle()`, distinct minima, lowest-energy readout, min eigenvalue), `verdict_b3` |
 | `experiment_b0.py` | Mechanical allostery: local rule vs converged ceiling (`mech_ceiling`) and matched-budget GD; trajectory diagnostics; d-map; `verdict_b0` |
 | `experiment_b0_noise.py` | Read noise in the two bond reads (independent vs common-mode) × β; `verdict_b0_noise` (H5 mechanism) |
+| `experiment_b0_anneal.py` | Clean vs constant vs annealed read noise at each β's wall; `verdict_b0_anneal` (noise-as-resource) |
 
 **Shared:**
 
@@ -126,6 +129,7 @@ python experiment_b2.py      # Experiment B2: offline representability re-probe 
 python experiment_b3.py      # Experiment B3: parity-3 vs deformation, multistability measured (~2 min)
 python experiment_b0.py      # Experiment B0: mechanical allostery, local rule vs ceiling + matched GD, d-map (~26 min)
 python experiment_b0_noise.py  # read-noise sweep on B0's amplify task (~14 min)
+python experiment_b0_anneal.py # annealed read noise (clean / constant / annealed), ~6 min
 python experiment_a2.py      # Experiment A2: beta-law + Poiseuille headline (~1 s)
 ```
 

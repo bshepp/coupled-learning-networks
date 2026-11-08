@@ -15,7 +15,7 @@ valid, valued result** — the goal is the truth, not a PASS. Read `README.md` a
 
 ```bash
 pip install -r requirements.txt
-python -m pytest -q                                   # full suite (~76 tests, one module per source module, ~14 s)
+python -m pytest -q                                   # full suite (~79 tests, one module per source module, ~14 s)
 python -m pytest tests/test_coupled_learning.py -q    # one module
 python -m pytest tests/test_coupled_learning.py::test_training_reduces_error   # one test
 python experiment_a.py        # Experiment A driver: prints table, writes experiment_a_results.json
@@ -23,6 +23,7 @@ python experiment_b.py        # Experiment B driver: prints per-seed table, writ
 python experiment_b2.py       # Experiment B2: offline representability re-probe (scipy L-BFGS-B/DE), writes experiment_b2_results.json
 python experiment_b0.py       # Experiment B0: mechanical allostery (local rule vs mech_ceiling + matched GD, d-map), ~26 min
 python experiment_b0_noise.py # read-noise sweep (independent vs common-mode) on B0's amplify task, ~14 min
+python experiment_b0_anneal.py # annealed read noise, clean vs constant vs annealed (noise-as-resource), ~6 min
 python experiment_a2.py       # Experiment A2: beta-law on a heterogeneous net + Poiseuille headline, ~1 s
 python experiment_b3.py       # Experiment B3: parity-3 vs deformation with multistability MEASURED (multi-start settle), ~20 min
 ```
@@ -50,7 +51,7 @@ Two parallel module families, distinguished by the `_mech` / `mechanical_` / `sp
 | Offline-gradient control | `baselines.py` (linear adjoint) | `baselines.py` (implicit-function-theorem adjoint) |
 | Driver + verdict emit | `experiment_a.py` | `experiment_b.py` |
 | Representability re-probe (offline only) | — | `experiment_b2.py` + `parity_analysis.py` (Walsh parity purity, `verdict_b2`) |
-| Friendly-task positive control | `experiment_a.py` (A), `experiment_a2.py` (β-law, Poiseuille) | `experiment_b0.py` (allostery; `verdict_b0`), `experiment_b0_noise.py` (H5; `verdict_b0_noise`) |
+| Friendly-task positive control | `experiment_a.py` (A), `experiment_a2.py` (β-law, Poiseuille) | `experiment_b0.py` (allostery; `verdict_b0`), `experiment_b0_noise.py` (H5; `verdict_b0_noise`), `experiment_b0_anneal.py` (`verdict_b0_anneal`) |
 | Converged representability ceiling | — | `baselines.mech_ceiling` (L-BFGS-B + stability barrier) — use beside any plain-GD baseline |
 | Minimum-finding through snaps (Experiment C) | — | `mechanical_solver.settle()` (LM-damped; `relax_mech` stays the raising Newton solver) |
 | Multistability, measured | — | `experiment_b3.py` (`validate`: distinct minima per pattern, lowest-energy readout, min eigenvalue; `verdict_b3`) |
