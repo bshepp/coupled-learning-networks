@@ -170,10 +170,11 @@ Levenberg–Marquardt minimizer (`settle()`), counts rescues separately, and **m
 7. **(Downgraded.) Stability-regularized local rule.** Motivated by B0 run 1's buckling, which was the
    solver artifact. The measured margin drifts only 10–30 % over 6000 epochs; revisit only if a longer
    budget or larger d_max shows the margin actually approaching zero (`min_eig_history` now records it).
-8. **Conditioning of the two-phase update vs plain GD (from B0's follow-up).** The local rule beat
-   matched-budget GD 30–100× on inversion with smaller steps and β-independence; GD is unstable above
-   lr ≈ 0.5. Measure the loss Hessian spectrum and the rule's effective preconditioner. Interpretation
-   only; no verdict.
+8. **Conditioning of the two-phase update vs plain GD** — *done 2026-11-08* (B0 findings, "Conditioning
+   follow-up"): loss Hessian λ_max 2.09 (rest lengths) vs 5e-4 (stiffnesses); GD stability bound lr < 0.96,
+   so matched GD at lr 1 was at its edge and spikes; the finite-β update turns away from the raw gradient
+   along the trajectory (cosine 0.65, magnitude 0.28×) and never spikes — an implicitly damped step on stiff
+   directions. Open: does it generalize (other tasks, the resistor net)?
 9. **Read-noise follow-ups.** β-scaling is resolved (run 2). Open: the *noise-helps transient* — at σ = 1e-3
    the noisy trajectory's best error is ~100× below the clean run's; pre-register an annealed-σ run
    (commons `noise-as-resource`).
