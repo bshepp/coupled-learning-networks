@@ -75,7 +75,9 @@ def read_bond_extensions(net, x_free, x_nudged, l, read_noise=None):
     ef = bond_extensions(net, x_free, l)
     en = bond_extensions(net, x_nudged, l)
     if read_noise is not None and read_noise.get("sigma", 0.0) > 0:
-        s = float(read_noise["sigma"]); rng = read_noise["rng"]
+        s = float(read_noise["sigma"]) * float(read_noise.get("scale", 1.0)); rng = read_noise["rng"]
+        if s <= 0:
+            return ef, en
         xi1 = rng.standard_normal(ef.shape)
         xi2 = rng.standard_normal(en.shape) if read_noise.get("mode", "independent") == "independent" else xi1
         ef = ef + s * xi1; en = en + s * xi2
@@ -105,7 +107,10 @@ def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
     jumps = 0; trials = 0; rescues = 0
     readouts = np.zeros(len(patterns))
     x_prev = [None] * len(patterns)          # warm start: each pattern's last free equilibrium
-    for _ in range(epochs):
+    for ep in range(epochs):
+        if read_noise is not None and read_noise.get("anneal_epochs"):
+            # linear anneal of the read-noise std to zero over anneal_epochs (commons noise-as-resource)
+            read_noise["scale"] = max(0.0, 1.0 - ep / float(read_noise["anneal_epochs"]))
         dk = np.zeros_like(k); dl = np.zeros_like(l)
         readouts = np.zeros(len(patterns))
         epoch_jumps = 0; epoch_min_eig = float("inf")

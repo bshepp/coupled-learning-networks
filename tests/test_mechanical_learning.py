@@ -142,3 +142,20 @@ def test_free_phase_never_returns_a_saddle():
     # started exactly AT the saddle Newton "converges" immediately (zero force); the free phase must reject it
     x, info = free_phase_mech(net, k, l, np.array([]), 1.0, x_init=x0.copy())
     assert info["rescued"] is True and info["min_eig"] > 0 and abs(abs(x[1, 1]) - np.sqrt(1.1 ** 2 - 1)) < 1e-6
+
+
+def test_read_noise_anneal_scales_the_noise_to_zero():
+    from mechanical_learning import read_bond_extensions
+    net, k, l = _small_task()
+    pattern = np.array([1.0, -1.0, 1.0])
+    xf, _ = free_phase_mech(net, k, l, pattern, d=0.1)
+    xn, _, _ = nudged_phase_mech(net, k, l, pattern, d=0.1, target=0.1, beta=0.05, x_free=xf)
+    ef0, en0 = read_bond_extensions(net, xf, xn, l, None)
+    rn = {"sigma": 1e-2, "mode": "independent", "rng": np.random.default_rng(0), "scale": 0.0}
+    ef, en = read_bond_extensions(net, xf, xn, l, rn)
+    assert ef == pytest.approx(ef0) and en == pytest.approx(en0)          # fully annealed = clean
+    task = {"net": net, "patterns": np.array([pattern]), "labels": np.array([1.0]),
+            "d": 0.1, "target_pos": 0.1, "target_neg": -0.1}
+    rn = {"sigma": 1e-3, "mode": "independent", "rng": np.random.default_rng(0), "anneal_epochs": 4}
+    train_mech(task, k, l, beta=0.05, eta_k=0.1, eta_l=0.1, epochs=6, read_noise=rn)
+    assert rn["scale"] == 0.0                                              # schedule reached zero

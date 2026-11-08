@@ -133,3 +133,10 @@ def test_verdict_b3_branches():
     assert verdict_b3(rows)["0.3"]["status"] == "PASS-ROBUST"
     rows = [_r3(0.3, 0, 0.2, 0.1, 0.0, min_eig=-0.1), _r3(0.3, 1, 0.2, 0.1, 0.0)]
     assert verdict_b3(rows)["0.3"]["status"] == "AMBIGUOUS"
+
+
+def test_verdict_b0_anneal_branches():
+    from tasks import verdict_b0_anneal
+    assert verdict_b0_anneal([1e-3, 2e-3], [1e-2, 1e-2], [5e-2, 5e-2])["status"] == "NOISE-HELPS"
+    assert verdict_b0_anneal([1.5e-2, 1e-2], [1e-2, 1e-2], [5e-2, 5e-2])["status"] == "NOISE-NEUTRAL"
+    assert verdict_b0_anneal([1e-1, 1e-1], [1e-2, 1e-2], [5e-2, 5e-2])["status"] == "NOISE-HURTS"

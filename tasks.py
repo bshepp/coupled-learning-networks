@@ -257,3 +257,20 @@ def verdict_b3(rows, k=3.0, multi_frac=0.5):
                        "sep_traj_min": float(min(r["sep_traj"] for r in rs)),
                        "sep_lowest_max": float(max(r["sep_lowest"] for r in rs))}
     return out
+
+
+def verdict_b0_anneal(err_annealed, err_clean, err_constant, help_factor=0.5, same_factor=2.0):
+    """Pre-registered verdict for the annealed read-noise follow-up (commons noise-as-resource): lists of
+    final errors over seeds for the annealed-sigma run, the clean (sigma = 0) run and the constant-sigma run.
+      NOISE-HELPS    median(annealed) <= help_factor * median(clean)  (and annealed beats constant)
+      NOISE-NEUTRAL  median(annealed) within a factor same_factor of median(clean)
+      NOISE-HURTS    otherwise."""
+    a, c, k = float(np.median(err_annealed)), float(np.median(err_clean)), float(np.median(err_constant))
+    out = {"median_annealed": a, "median_clean": c, "median_constant": k}
+    if a <= help_factor * c and a < k:
+        out["status"] = "NOISE-HELPS"
+    elif a <= same_factor * c:
+        out["status"] = "NOISE-NEUTRAL"
+    else:
+        out["status"] = "NOISE-HURTS"
+    return out
