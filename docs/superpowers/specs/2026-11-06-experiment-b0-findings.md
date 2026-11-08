@@ -124,6 +124,15 @@ directions of this loss — while the local rule reaches 5.7e-3 at every β, ess
   magnitude relative to the gradient halves; the trajectory never spikes, and after 2000 epochs it is at
   5.7e-3 (B0 follow-up) where GD at lr 0.66 is at 0.30.
 
+- **Generalization check on Experiment A's linear resistor net** (regression, η = lr = 0.5, β = 0.01, where
+  A's headline had local 1.26e-4 vs GD 9.23e-4): the local update stays *perfectly* aligned with the gradient
+  along the whole trajectory (cosine 1.0000) but its magnitude is **1.98 → 1.67×** the GD step; GD's
+  stability bound there is lr < 119, far from 0.5, and GD never oscillates. So on the linear net the local
+  rule's edge is a plain step-scale effect of the hard-clamp update (its scale relative to ∇L depends on the
+  output node's effective conductance), not conditioning. Methodological upshot for both experiments:
+  **lr = η is not a matched effective step** — the ratio is substrate-dependent (A ≈ 1.7–2.0, B0 ≈ 0.66) and
+  should be measured at init and reported beside any local-vs-GD comparison.
+
 ### d-map (amplify, seed 0, 1000 epochs): where on the deformation axis does the rule work?
 | d_max | untrained r₀ | ceiling | local (1000 epochs) | jump | tail |
 |---|---|---|---|---|---|
@@ -157,8 +166,10 @@ The finite-β two-phase update equals the gradient at init and then departs from
 the trajectory (cosine 0.65, magnitude 0.28× the gradient by epoch 1500) — the nudged-equilibrium contrast
 saturates along stiff directions, so the rule takes a *damped* step there and never spikes. In other words
 the finite-β coupled-learning update behaves like an implicitly preconditioned (proximal-like) gradient
-step: it can run at a nominal step GD cannot. This is now a measured mechanism, not a hypothesis; what
-remains open is whether it generalizes beyond this task. The amplify AMBIGUOUS (seed 0, 2.6× behind GD,
+step: it can run at a nominal step GD cannot. This is now a measured mechanism, not a hypothesis. It does
+*not* carry over to Experiment A's linear net, where the local update is exactly the gradient at ~1.7–2×
+the GD step and GD is nowhere near instability: there the headline "local ≤ baseline" is a step-scale
+artifact of lr-matching, harmless to A's verdict but worth knowing. The amplify AMBIGUOUS (seed 0, 2.6× behind GD,
 both still descending) is the one cell where GD's larger raw step paid off within the budget.
 
 **Both optimizers are slow gradient flows far from the ceiling.** The converged L-BFGS ceiling is 10–1000×

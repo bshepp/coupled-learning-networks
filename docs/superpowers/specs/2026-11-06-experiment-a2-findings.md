@@ -70,6 +70,14 @@ the local update (the `edge_energy_grad` trap the commons promotion closed). Thi
 the result is unsurprising but closes an open item and gives the hardware arm a reproducible software
 reference point (radii move only ~±10 % to solve both tasks).
 
+**Note on A's local-vs-GD comparison (2026-11-08).** On the resistor regression task the local update is
+exactly the gradient direction at every epoch (cosine 1.0000) but 1.7–2.0× the GD step at lr = η, with GD
+far inside its stability bound (lr < 119). Experiment A's "local error below the baseline" is therefore a
+step-scale effect of the hard-clamp update, not evidence that the rule optimizes better than GD; it does not
+affect A's PASS (which requires only ≤ 1.15× the baseline plus alignment). Report the measured
+\|Δg_local\| / \|η∇L\| ratio beside any such comparison (B0's conditioning follow-up has the elastic case,
+where the ratio is 0.66 and the story is genuinely about conditioning).
+
 **Caveat.** Both Poiseuille tasks are solved to machine zero, so the *comparison* to the baseline is not
 informative beyond "both solve it"; the PASS is carried by the alignment (ρ = 1.000) and by the error
 being at the floor. The `abs_floor` and significant-sign metric were introduced after seeing the first
