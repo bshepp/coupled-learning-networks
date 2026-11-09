@@ -173,6 +173,6 @@ rather than history-determined on a lattice" — the question B3 posed from the 
   learning in materials (Arm 2).
 - Howell, *Compliant Mechanisms* (2001); bistable/von-Mises trusses — designed bistability (Arm 1).
 - This repo: `2026-06-19-experiment-b-findings.md`, `2026-11-05-experiment-b2-findings.md`,
-  `2026-11-06-experiment-b0-findings.md` (when written); commons `synthesis/hypotheses.md` H4,
+  `2026-11-06-experiment-b0-findings.md`, `2026-11-06-experiment-b3-findings.md`; commons `synthesis/hypotheses.md` H4,
   `lessons-ledger.md` (`expressivity-multistability-pincer`, `gradient-flow-is-the-ep-license`,
   `network-foreclose-needs-a-positive-control`).

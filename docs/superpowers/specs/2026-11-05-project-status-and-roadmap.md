@@ -86,7 +86,7 @@ means the claim was under-supported. **Experiment B2 (today) re-probes exactly t
 
 **What the commons asked of `01` since June (BULLETIN, 2026-07-15):**
 - Record the audit on **two axes** (gradient source × write mechanism); the canonical recorder is
-  `commons/audit.py`, with `01`'s one-axis `Auditor` kept as a shim pending a RECONCILE. → *Roadmap item.*
+  `commons/audit.py`, with `01`'s one-axis `Auditor` kept as a shim pending a RECONCILE. → *Done 2026-11-05 (item 2).*
 - Before trusting a contrastive update as the gradient, confirm the relaxation **descends an energy**
   (`gradient-flow-is-the-ep-license`). Both of `01`'s substrates do (co-content / elastic energy) — this is
   why the keystones hit ρ→1; stated now in the README.
