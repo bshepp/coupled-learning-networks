@@ -42,10 +42,13 @@ def allostery_task(rows=3, cols=3, ratio=0.5, n_samples=6, seed=1):
     return Task("allostery", net, V_src, Y)
 
 
-def verdict(local_error, baseline_error, sign_match, rho, tol=0.15, sm_thresh=0.95, rho_thresh=0.9):
+def verdict(local_error, baseline_error, sign_match, rho, tol=0.15, sm_thresh=0.95, rho_thresh=0.9,
+            abs_floor=0.0):
     """PASS: local rule reaches the offline baseline AND its update aligns with the true
-    gradient. FORECLOSE: local rule cannot reach the baseline. AMBIGUOUS: otherwise."""
-    learns = local_error <= baseline_error * (1.0 + tol)
+    gradient. FORECLOSE: local rule cannot reach the baseline. AMBIGUOUS: otherwise.
+    abs_floor (default 0 = Experiment A's original rule): a normalized MSE at or below it counts as
+    'reached' regardless of the ratio -- at machine zero (1e-29 vs 1e-31) a relative test is noise."""
+    learns = local_error <= max(baseline_error * (1.0 + tol), abs_floor)
     aligned = (sign_match >= sm_thresh) and (rho >= rho_thresh)
     if learns and aligned:
         status = "PASS"
@@ -80,6 +83,58 @@ def parity3_mech_task(rows=4, cols=4, d=0.3, seed=0):
             "target_pos": +0.5 * d, "target_neg": -0.5 * d}
 
 
+def allostery_mech_task(rows=4, cols=4, d_max=0.1, ratio=0.5, n_samples=6, seed=0):
+    """Mechanical allostery (Rocks et al. 2017 idiom): ONE input node on the bottom row is displaced
+    in y by amplitudes u in d_max*U[0.3, 1]; the task is a prescribed transfer ratio at the distant
+    output node (top-right, y): target = ratio * u. Patterns are the amplitudes themselves (d = 1), so
+    the same train_mech / baseline machinery applies with continuous targets. The bottom-left node is
+    pinned fully and the bottom-right node in y (3 rigid-body DOFs removed; the bottom edge is held)."""
+    x0, edges = triangulated_lattice(rows, cols)
+    in_node = 0 * cols + (cols // 2)
+    out_node = (rows - 1) * cols + (cols - 1)
+    pinned_dofs = [dof(0, 0), dof(0, 1), dof(cols - 1, 1)]
+    net = SpringNetwork(x0, edges, pinned_dofs=pinned_dofs, input_dofs=[dof(in_node, 1)],
+                        output_dof=dof(out_node, 1))
+    rng = np.random.default_rng(seed)
+    u = d_max * rng.uniform(0.3, 1.0, size=(n_samples, 1))
+    return {"net": net, "patterns": u, "labels": None, "targets": ratio * u[:, 0], "d": 1.0,
+            "d_max": d_max, "ratio": ratio}
+
+
+def verdict_b0(local_error, baseline_error, untrained_error, jump_rate, sign_match, rho,
+               ceiling_error=None, tol=0.15, abs_floor=1e-3, rep_max=0.1, jump_max=0.2, sm_min=0.9,
+               rho_min=0.8):
+    """Pre-registered verdict for Experiment B0 (does the mechanical local rule LEARN a representable
+    task on the elastic medium?). baseline_error = the matched-budget offline GD (same epochs, lr = eta);
+    ceiling_error = the converged L-BFGS representability ceiling (defaults to baseline_error).
+    jump_rate should be the instability rate over the LAST 20% of training (train_mech's
+    jump_rate_tail), so a rule that drives the lattice into buckling late in training is labelled as
+    such rather than as a learnability failure. Evaluated in order:
+      MULTISTABILITY-FORECLOSE   jump_rate > jump_max (the two-phase rule is ill-defined here)
+      FORECLOSE-REPRESENTABILITY the converged ceiling cannot bring normalized MSE below rep_max
+      PASS                       local error <= max(baseline*(1+tol), abs_floor) AND init alignment holds
+      FORECLOSE-LEARNABILITY     representable, but the local rule does not even halve the untrained error
+      AMBIGUOUS                  otherwise (learns but misses the baseline, or weak alignment)."""
+    if ceiling_error is None:
+        ceiling_error = baseline_error
+    out = {"local_error": float(local_error), "baseline_error": float(baseline_error),
+           "ceiling_error": float(ceiling_error), "untrained_error": float(untrained_error),
+           "jump_rate": float(jump_rate), "sign_match": float(sign_match), "rho": float(rho)}
+    learns = local_error <= max(baseline_error * (1.0 + tol), abs_floor)
+    aligned = sign_match >= sm_min and rho >= rho_min
+    if jump_rate > jump_max:
+        out["status"] = "MULTISTABILITY-FORECLOSE"
+    elif not (ceiling_error <= rep_max):
+        out["status"] = "FORECLOSE-REPRESENTABILITY"
+    elif learns and aligned:
+        out["status"] = "PASS"
+    elif local_error > 0.5 * untrained_error:
+        out["status"] = "FORECLOSE-LEARNABILITY"
+    else:
+        out["status"] = "AMBIGUOUS"
+    return out
+
+
 def two_sided_separation(r, y):
     """Separable in EITHER polarity: max(min(+)-max(-), min(-)-max(+)). >0 iff a threshold splits
     the classes; <=0 iff they overlap. (Ported idiom from self-assembly/stage1_network.py.)"""
@@ -109,4 +164,113 @@ def verdict_b(local_sep, baseline_sep, floor, jump_rate, sign_match, rho,
         out["status"] = "PASS"
     else:
         out["status"] = "AMBIGUOUS"
+    return out
+
+
+def verdict_b2(rows, k=3.0, unstable_max=0.2, sat_tol=0.02):
+    """Pre-registered verdict for Experiment B2 (is B's representability FORECLOSE a budget/objective
+    artifact?). rows: one dict per deformation d with sep_min / sep_max (two-sided separation at the
+    offline optimum, min/max over seeds and optimizers), snr_min (sep_min / floor), unstable_frac
+    (fraction of seeds whose lattice cannot even be solved at that d = the buckling regime),
+    saturation_gap (purity gain over the last budget doubling, or 0 if the optimizer converged within
+    budget; small = the budget is saturated).
+      REPRESENTABLE: some STABLE d (unstable_frac <= unstable_max) separates robustly (sep_min > 0,
+        snr_min >= k) -> B's representability foreclosure was an artifact; learnability reopens.
+      FORECLOSE-REPRESENTABILITY-CONFIRMED: every stable d has sep_max <= 0 with a saturated budget, and
+        no d (stable or not) separates.
+      AMBIGUOUS: anything in between (marginal / single-seed / unstable-only positives, unsaturated budget,
+        or no stable regime probed at all)."""
+    stable = [r for r in rows if r["unstable_frac"] <= unstable_max]
+    out = {"n_rows": len(rows), "n_stable": len(stable)}
+    if any(r["sep_min"] > 0 and r["snr_min"] >= k for r in stable):
+        out["status"] = "REPRESENTABLE"
+    elif (stable and all(r["sep_max"] <= 0 and r["saturation_gap"] <= sat_tol for r in stable)
+          and all(r["sep_max"] <= 0 for r in rows)):
+        out["status"] = "FORECLOSE-REPRESENTABILITY-CONFIRMED"
+    else:
+        out["status"] = "AMBIGUOUS"
+    return out
+
+
+def verdict_b0_noise(walls, control_ok, min_gap=10.0, max_same=3.0):
+    """Pre-registered verdict for the elastic read-noise sweep (commons H5, mechanism form -- no
+    hardware-realistic sigma exists for this medium, so the verdict is about the MECHANISM, not a
+    device). walls: {(mode, beta): sigma_wall} where sigma_wall is the smallest swept read-noise std at
+    which the trained error exceeds the wall criterion (inf if never). control_ok: the sigma = 0 rule
+    learns (positive control).
+      UNTESTED                 the clean rule does not learn -> the noise question is not askable here
+      H5-MECHANISM-CONFIRMED   independent-read wall >= min_gap x below the common-mode wall at every
+                               beta, AND the independent wall is lower at the smaller beta (eta/beta
+                               amplification)
+      H5-MECHANISM-REFUTED     independent and common-mode walls within max_same x at every beta
+      AMBIGUOUS                otherwise"""
+    out = {"walls": {f"{m}|{b}": float(w) for (m, b), w in walls.items()}, "control_ok": bool(control_ok)}
+    if not control_ok:
+        out["status"] = "UNTESTED"; return out
+    betas = sorted({b for (_, b) in walls})
+    gaps = []
+    for b in betas:
+        wi, wc = walls.get(("independent", b), float("inf")), walls.get(("common", b), float("inf"))
+        gaps.append(wc / wi if wi > 0 and np.isfinite(wi) else (1.0 if not np.isfinite(wc) else float("inf")))
+    ind = [walls.get(("independent", b), float("inf")) for b in betas]
+    beta_scaling = len(betas) < 2 or all(ind[i] <= ind[i + 1] for i in range(len(betas) - 1))
+    out["gaps_common_over_independent"] = gaps
+    out["independent_wall_grows_with_beta"] = bool(beta_scaling)
+    # equal walls at every beta satisfy the (non-decreasing) scaling test trivially: say so
+    out["beta_scaling_resolved"] = len(set(ind)) > 1
+    if all(g >= min_gap for g in gaps) and beta_scaling:
+        out["status"] = "H5-MECHANISM-CONFIRMED"
+    elif all(np.isfinite(g) and g <= max_same for g in gaps):
+        out["status"] = "H5-MECHANISM-REFUTED"
+    else:
+        out["status"] = "AMBIGUOUS"
+    return out
+
+
+def verdict_b3(rows, k=3.0, multi_frac=0.5):
+    """Pre-registered verdict for Experiment B3 (parity-3 on the elastic lattice vs deformation, with
+    multistability MEASURED by multi-start minimization). rows: one dict per (d, seed) with
+    sep_traj (two-sided separation of the trained run's own readouts), sep_lowest (separation re-evaluated
+    at each pattern's lowest-energy minimum), snr_lowest (sep_lowest / floor), frac_multi (fraction of
+    patterns with >= 2 distinct minima), min_eig (smallest eigenvalue over the validated minima).
+    Per d (all seeds):
+      PASS-ROBUST                sep_lowest > 0 on every seed with snr_lowest >= k and min_eig > 0
+      MULTISTABLE-HYSTERETIC     frac_multi >= multi_frac on a majority of seeds AND some seed has
+                                 sep_traj > 0 while sep_lowest <= 0 (separation by basin selection, not by
+                                 the thermodynamically selected state)
+      FORECLOSE-REPRESENTABILITY frac_multi < multi_frac on every seed and sep_lowest <= 0 on every seed
+      AMBIGUOUS                  otherwise."""
+    out = {}
+    for d in sorted({r["d"] for r in rows}):
+        rs = [r for r in rows if r["d"] == d]
+        multi = [r["frac_multi"] >= multi_frac for r in rs]
+        if all(r["sep_lowest"] > 0 and r["snr_lowest"] >= k and r["min_eig"] > 0 for r in rs):
+            status = "PASS-ROBUST"
+        elif sum(multi) > len(rs) / 2 and any(r["sep_traj"] > 0 and r["sep_lowest"] <= 0 for r in rs):
+            status = "MULTISTABLE-HYSTERETIC"
+        elif not any(multi) and all(r["sep_lowest"] <= 0 for r in rs):
+            status = "FORECLOSE-REPRESENTABILITY"
+        else:
+            status = "AMBIGUOUS"
+        out[str(d)] = {"status": status, "n_seeds": len(rs),
+                       "frac_multi_mean": float(np.mean([r["frac_multi"] for r in rs])),
+                       "sep_traj_min": float(min(r["sep_traj"] for r in rs)),
+                       "sep_lowest_max": float(max(r["sep_lowest"] for r in rs))}
+    return out
+
+
+def verdict_b0_anneal(err_annealed, err_clean, err_constant, help_factor=0.5, same_factor=2.0):
+    """Pre-registered verdict for the annealed read-noise follow-up (commons noise-as-resource): lists of
+    final errors over seeds for the annealed-sigma run, the clean (sigma = 0) run and the constant-sigma run.
+      NOISE-HELPS    median(annealed) <= help_factor * median(clean)  (and annealed beats constant)
+      NOISE-NEUTRAL  median(annealed) within a factor same_factor of median(clean)
+      NOISE-HURTS    otherwise."""
+    a, c, k = float(np.median(err_annealed)), float(np.median(err_clean)), float(np.median(err_constant))
+    out = {"median_annealed": a, "median_clean": c, "median_constant": k}
+    if a <= help_factor * c and a < k:
+        out["status"] = "NOISE-HELPS"
+    elif a <= same_factor * c:
+        out["status"] = "NOISE-NEUTRAL"
+    else:
+        out["status"] = "NOISE-HURTS"
     return out

@@ -124,3 +124,64 @@ not subject to the buckling/multistability tradeoff that pincers the elastic sub
 the mechanism is real) and Experiment B (FORECLOSE, the elastic medium can't host parity) together
 characterize the boundary: co-located learning works; clearing the parity wall needs a substrate whose
 non-monotonicity does not come with a multistability penalty.
+
+---
+
+## Addendum (2026-11-06) — the multistability leg was a solver artifact; the verdict is FORECLOSE-REPRESENTABILITY
+
+**What was found.** Experiment B0 (mechanical allostery, 2026-11-06) traced an "instability event" during
+training to its source: the free-phase Newton solve, **cold-started from the reference geometry `x0`** on a
+lattice whose rest lengths had drifted far from geometry, failed its line search — while the equilibrium it
+was looking for is **unique** (eight random starts converge to one minimum) and **stable** (smallest
+tangent-stiffness eigenvalue +0.028). A Levenberg–Marquardt-damped solver (`mechanical_solver.settle`) or a
+Newton warm-started from a neighbouring equilibrium reaches it in 2–8 iterations. The `RuntimeError` that
+this experiment counts as a buckling/multistability event was therefore, at least in these cases, a
+**cold-start artifact of the Newton line search**, not a physical event.
+
+**The fix (commit "free phase warm-starts and falls back to settle()").** `free_phase_mech` now warm-starts
+each pattern from its previous equilibrium and falls back to `settle()` when Newton fails, flagging the
+rescue; only a failure of `settle()` too is counted as instability. `relax_mech` itself is unchanged.
+
+**Re-run of this experiment under the corrected seam** (`python experiment_b.py`, default config, identical
+seeds and inits):
+
+| seed | local_sep | baseline_sep | jump_rate | sign@init | ρ@init | ρ@end |
+|---|---|---|---|---|---|---|
+| 0 | −7.20e-02 | −7.34e-02 | **0.00** | 0.97 | 1.000 | 1.000 |
+| 1 | −6.17e-02 | −5.95e-02 | 0.00 | 0.95 | 1.000 | 1.000 |
+| 2 | −7.32e-02 | −4.40e-02 | **0.00** | 0.98 | 1.000 | 1.000 |
+
+**Verdict under the corrected seam: FORECLOSE-REPRESENTABILITY** (SNR −73; audit 1.00; η/β = 100). Every
+jump rate is zero; every baseline is finite; seed 0's ρ@end reads 1.000 (the June 0.000 was the same
+artifact, caught at the alignment step). Compare the June table: jump rates 0.19 / 0.00 / 0.26 and two
+`−inf` baselines — all of them cold-start failures.
+
+**What changes in the interpretation.**
+- The **two-part "pincer"** as stated above is **not supported by this experiment's data**. The
+  *representability* leg stands and is now the whole verdict (and is independently confirmed and
+  quantified by Experiment B2: parity channel ∝ d³, negative separation in 38/38 offline optima). The
+  *multistability* leg — "the regime non-monotone enough to represent parity is where the lattice buckles
+  and the rule becomes ill-defined" — was inferred from instability counts that this seam produced
+  spuriously at d = 0.1. Whether genuine multistability appears at larger deformation is a separate, open
+  question (B2's re-run under the corrected seam addresses the untrained lattice's stability at d = 0.3).
+- The learning *mechanism* conclusion is unchanged and stronger: ρ = 1.000 at init on every seed.
+- The portfolio statement "the wall is deeper than passivity" survives on the representability leg alone.
+- For the commons: `lessons-ledger#expressivity-multistability-pincer` should be read with this addendum;
+  the multistability half of the pincer needs re-establishing with the corrected seam before it is cited.
+  A new lesson candidate replaces it: **a crash-tolerant solver seam must distinguish "the solver failed
+  from its start point" from "no stable equilibrium exists"** — count only the latter as physics. The
+  original design (§ "Crash-tolerance is intentional") conflated them.
+
+**What does not change.** The June table above is left as recorded (that is what the code of the day
+produced); this addendum is the correction. Observed numbers for the corrected seam are in
+`experiment_b_results.json` from the 2026-11-06 run and in `2026-11-06-experiment-b0-findings.md`.
+
+**Follow-up the same day (Experiment B3, `2026-11-06-experiment-b3-findings.md`).** With multistability
+*measured* (multi-start minimization of each learned configuration), the pincer is re-established in a
+corrected form: at d = 0.1–0.2 the minima are unique and parity-3 is unrepresentable
+(FORECLOSE-REPRESENTABILITY); at d = 0.3–0.5 the lattice has 2–5 minima per pattern, the local rule's own
+readouts separate parity-3 (all three seeds at d = 0.5), and re-evaluated at each pattern's lowest-energy
+minimum the separation is strongly negative (MULTISTABLE-HYSTERETIC) — the separation is basin selection
+along the trajectory, not a property of the lattice. Both halves of the June pincer are now data; the
+mechanism statement "the two-phase rule becomes ill-defined" is sharpened to "the readout becomes
+hysteretic".

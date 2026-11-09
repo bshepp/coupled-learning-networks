@@ -66,64 +66,136 @@ def gd_baseline(net, params0, law, task, epochs, lr, p_min=1e-3, p_max=10.0, aud
     return {"params": params, "history": history, "final_error": task_error(out, task.targets)}
 
 
-def gradient_alignment(delta_local, neg_grad):
+def gradient_alignment(delta_local, neg_grad, sign_tol=1e-9):
+    """sign_match / rho / cosine between the local update and -grad L. sign_match counts every
+    component (the original metric); sign_match_significant excludes components whose |grad| is below
+    sign_tol * max|grad| -- on a symmetric lattice some edges have an exactly-zero gradient, and the sign
+    of a zero is noise, not misalignment (A2 found 2 of 12 such edges at init)."""
     a = np.asarray(delta_local, float)
     b = np.asarray(neg_grad, float)
     sign_match = float(np.mean(np.sign(a) == np.sign(b)))
+    sig = np.abs(b) > sign_tol * (np.abs(b).max() if b.size else 0.0)
+    sign_sig = float(np.mean(np.sign(a[sig]) == np.sign(b[sig]))) if sig.any() else sign_match
     rho = float(np.corrcoef(a, b)[0, 1]) if a.std() > 0 and b.std() > 0 else 0.0
     cosine = float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-12))
-    return {"sign_match": sign_match, "rho": rho, "cosine": cosine}
+    return {"sign_match": sign_match, "sign_match_significant": sign_sig, "n_significant": int(sig.sum()),
+            "rho": rho, "cosine": cosine}
 
 
 # --- Experiment B: implicit-adjoint gradient through the nonlinear equilibrium ---------------
-from spring_network import tangent_stiffness, m as _mB, dm as _dmB, d2m as _d2mB
+from spring_network import tangent_stiffness, _bond_geometry, bond_tension, bond_tangent
 
 
-def mech_adjoint_gradient(net, k, l, patterns, d, targets):
-    """dL/dk, dL/dl for L = 0.5*mean_p (r_p - t_p)^2 via the implicit function theorem.
-    At equilibrium grad_x E = 0, so dx/dtheta = -Hff^{-1} d(grad_free E)/dtheta. Adjoint:
-    Hff lam = dL/dx_free; dL/dtheta = -lam . d(grad_free E)/dtheta. lam = 0 on clamped DOFs."""
-    from mechanical_learning import free_phase_mech, readout, _input_clamp
+def mech_readout_adjoint(net, k, l, patterns, d, dL_dr, xs=None):
+    """Generic implicit-function-theorem adjoint: for a loss L(r_1..r_P) of the free-phase readouts,
+    given dL/dr_p per pattern, return (dL/dk, dL/dl). At equilibrium grad_x E = 0, so
+    dx/dtheta = -Hff^{-1} d(grad_free E)/dtheta; adjoint solve Hff lam = dL/dx_free (lam = 0 on
+    clamped DOFs); dL/dtheta = -lam . d(grad_free E)/dtheta. Reuses the Newton tangent stiffness.
+    xs: optional precomputed free equilibria per pattern (skips the re-solve)."""
+    from mechanical_learning import free_phase_mech, _input_clamp
     n = net.x0.shape[0]
     gk = np.zeros(len(net.edges)); gl = np.zeros(len(net.edges))
-    P = len(patterns)
-    for p in range(P):
-        x, _ = free_phase_mech(net, k, l, patterns[p], d)
+    dL_dr = np.asarray(dL_dr, float)
+    for p in range(len(patterns)):
+        x = xs[p] if xs is not None else free_phase_mech(net, k, l, patterns[p], d)[0]
         clamp = _input_clamp(net, patterns[p], d)
         free = np.array([dd for dd in range(2 * n) if dd not in clamp], int)
-        fpos = {dd: idx for idx, dd in enumerate(free)}
         H = tangent_stiffness(net, x, k, l)
         Hff = H[np.ix_(free, free)]
         rhs = np.zeros(free.size)
-        r = readout(net, x)
-        rhs[fpos[net.output_dof]] = (r - targets[p]) / P          # dL/dx at the output free DOF
+        rhs[int(np.searchsorted(free, net.output_dof))] = dL_dr[p]   # dL/dx at the output free DOF
         lam = np.zeros(2 * n)
         lam[free] = np.linalg.solve(Hff, rhs)
-        # d(grad E)/dtheta per bond: dgrad/dk_b at node i = (T_b/k_b) dh ; dgrad/dl_b = -kt_b dh
-        for b, (i, j) in enumerate(net.edges):
-            dvec = x[i] - x[j]; L = np.linalg.norm(dvec); dh = dvec / L; e = L - l[b]
-            me = float(_mB(e, net.alpha, net.w)); m1 = float(_dmB(e, net.alpha, net.w))
-            Tk = 0.5 * m1 * e * e + me * e                        # T/k = d(E/k)/dL coefficient
-            dlam_i = lam[2 * i:2 * i + 2]; dlam_j = lam[2 * j:2 * j + 2]
-            dgk = Tk * dh                                         # dgrad_i/dk ; node j = -dgk
-            gk[b] += -(dlam_i @ dgk - dlam_j @ dgk)
-            # kt for dl term
-            m2 = float(_d2mB(e, net.alpha, net.w))
-            kt = 0.5 * k[b] * (m2 * e * e + 4.0 * m1 * e + 2.0 * me)
-            dgl = -kt * dh                                        # dgrad_i/dl ; node j = -dgl
-            gl[b] += -(dlam_i @ dgl - dlam_j @ dgl)
+        # d(grad E)/dtheta per bond, at node i: (T_b/k_b) dh for k_b ; -kt_b dh for l_b (node j: negated)
+        E, L, dh, e = _bond_geometry(net, x, l)
+        Tk = bond_tension(net, e, np.ones_like(e))                  # T / k
+        kt = bond_tangent(net, e, k)
+        dlam = lam.reshape(n, 2)[E[:, 0]] - lam.reshape(n, 2)[E[:, 1]]  # (B, 2)
+        proj = np.einsum("bi,bi->b", dlam, dh)
+        gk += -(Tk * proj)
+        gl += -(-kt * proj)
     return gk, gl
 
 
-def gd_baseline_mech(task, k0, l0, epochs, lr, k_min=1e-2, k_max=1e2, l_min=0.1, l_max=5.0, audit=None):
+def mech_adjoint_gradient(net, k, l, patterns, d, targets):
+    """dL/dk, dL/dl for the per-class target loss L = 0.5*mean_p (r_p - t_p)^2 (the Experiment B
+    baseline objective), via mech_readout_adjoint with dL/dr_p = (r_p - t_p)/P."""
     from mechanical_learning import free_phase_mech, readout
+    P = len(patterns)
+    r = np.array([readout(net, free_phase_mech(net, k, l, patterns[p], d)[0]) for p in range(P)])
+    return mech_readout_adjoint(net, k, l, patterns, d, (r - np.asarray(targets, float)) / P)
+
+
+def mech_ceiling(task, k0, l0, maxiter=2000, max_restarts=8, k_min=1e-2, k_max=1e2, l_min=0.1, l_max=5.0,
+                 barrier=10.0, audit=None):
+    """REPRESENTABILITY ceiling for a mechanical task: L-BFGS-B on the implicit adjoint of the per-pattern
+    target MSE, run to convergence (restarting from the best solvable point when a line search aborts at
+    the stability wall). This is the budget-saturated "can THIS substrate express it?" number the
+    commons' foreclosure-can-be-a-budget-artifact lesson requires beside any plain-GD baseline. Failed
+    equilibrium solves return a quadratic barrier back to the last solvable point. OFFLINE_GRADIENT."""
+    from scipy.optimize import minimize
+    from mechanical_learning import free_phase_mech, readout, task_targets
     from audit import OFFLINE_GRADIENT
-    from tasks import two_sided_separation
-    net, patterns, labels, d = task["net"], task["patterns"], task["labels"], task["d"]
-    targets = np.where(labels > 0, task["target_pos"], task["target_neg"])
+    from tasks import task_error
+    net, patterns, d = task["net"], task["patterns"], task["d"]
+    targets = task_targets(task); P = len(patterns); E = len(net.edges)
+    state = {"last_ok": None, "best": None, "n_fail": 0, "n_eval": 0}
+
+    def f(theta):
+        k, l = theta[:E], theta[E:]
+        state["n_eval"] += 1
+        try:
+            xs = [free_phase_mech(net, k, l, patterns[p], d)[0] for p in range(P)]
+            r = np.array([readout(net, x) for x in xs])
+            gk, gl = mech_readout_adjoint(net, k, l, patterns, d, (r - targets) / P, xs=xs)
+        except RuntimeError:
+            state["n_fail"] += 1
+            if state["last_ok"] is None:
+                return 1e3, np.zeros_like(theta)
+            t_ok, L_ok = state["last_ok"]; dt = theta - t_ok
+            return L_ok + barrier * float(dt @ dt) + 1e-3, 2.0 * barrier * dt
+        if audit is not None:
+            audit.record(OFFLINE_GRADIENT, 2 * E)
+        L = 0.5 * float(np.mean((r - targets) ** 2))
+        state["last_ok"] = (theta.copy(), L)
+        if state["best"] is None or L < state["best"][0]:
+            state["best"] = (L, theta.copy())
+        return L, np.concatenate([gk, gl])
+
+    x = np.concatenate([np.asarray(k0, float), np.asarray(l0, float)])
+    bounds = [(k_min, k_max)] * E + [(l_min, l_max)] * E
+    nit = 0; converged = False; restarts = 0
+    while nit < maxiter and restarts <= max_restarts:
+        res = minimize(f, x, jac=True, method="L-BFGS-B", bounds=bounds,
+                       options={"maxiter": maxiter - nit, "maxfun": 4 * (maxiter - nit)})
+        nit += int(res.nit)
+        if str(res.message).startswith("CONVERGENCE"):
+            converged = True; break
+        restarts += 1
+        if state["best"] is None:
+            break
+        x = state["best"][1].copy()
+    if state["best"] is None:
+        return {"k": np.asarray(k0, float), "l": np.asarray(l0, float), "final_error": float("inf"),
+                "converged": False, "nit": nit, "restarts": restarts, "eval_fail_rate": 1.0}
+    theta = state["best"][1]; k, l = theta[:E], theta[E:]
+    r = np.array([readout(net, free_phase_mech(net, k, l, patterns[p], d)[0]) for p in range(P)])
+    return {"k": k, "l": l, "final_error": task_error(r, targets), "readouts": r,
+            "converged": converged, "nit": nit, "restarts": restarts,
+            "eval_fail_rate": state["n_fail"] / max(state["n_eval"], 1)}
+
+
+def gd_baseline_mech(task, k0, l0, epochs, lr, k_min=1e-2, k_max=1e2, l_min=0.1, l_max=5.0, audit=None):
+    from mechanical_learning import free_phase_mech, readout, task_targets
+    from audit import OFFLINE_GRADIENT
+    from tasks import two_sided_separation, task_error
+    net, patterns, d = task["net"], task["patterns"], task["d"]
+    labels = task.get("labels")
+    targets = task_targets(task)
     k = np.array(k0, float); l = np.array(l0, float)
     readouts = None
-    for _ in range(epochs):
+    fail_epochs = 0; first_fail = None
+    for ep in range(epochs):
         try:
             gk, gl = mech_adjoint_gradient(net, k, l, patterns, d, targets)
             k = np.clip(k - lr * gk, k_min, k_max)
@@ -131,14 +203,19 @@ def gd_baseline_mech(task, k0, l0, epochs, lr, k_min=1e-2, k_max=1e2, l_min=0.1,
             if audit is not None:
                 audit.record(OFFLINE_GRADIENT, 2 * len(net.edges))
         except RuntimeError:
-            # Solver failure during gradient computation; skip this epoch's step
+            # Solver failure during gradient computation = instability; counted, and the step is skipped
+            fail_epochs += 1
+            if first_fail is None:
+                first_fail = ep
             continue
     try:
         readouts = np.array([readout(net, free_phase_mech(net, k, l, patterns[p], d)[0])
                              for p in range(len(patterns))])
-        sep = two_sided_separation(readouts, labels)
+        sep = two_sided_separation(readouts, labels) if labels is not None else float("nan")
+        err = task_error(readouts, targets)
     except RuntimeError:
         # Any pattern's final solve fails → baseline could not be evaluated (instability)
         readouts = np.zeros(len(patterns))
-        sep = float("-inf")
-    return {"k": k, "l": l, "sep": sep, "readouts": readouts}
+        sep = float("-inf"); err = float("inf")
+    return {"k": k, "l": l, "sep": sep, "final_error": err, "readouts": readouts,
+            "fail_epochs": fail_epochs, "first_fail_epoch": first_fail}

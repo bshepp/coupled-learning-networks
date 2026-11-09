@@ -6,9 +6,17 @@ length l from the LOCAL extension contrast between the two relaxed states. No gl
 a weight."""
 import numpy as np
 from spring_network import bond_extensions, m, dm
-from mechanical_solver import relax_mech, basin_jump
-from tasks import two_sided_separation
+from mechanical_solver import relax_mech, basin_jump, settle
+from tasks import two_sided_separation, task_error
 from audit import PHYSICS_LOCAL
+
+
+def task_targets(task):
+    """Per-pattern targets: explicit task["targets"] (continuous tasks, e.g. allostery) or the two
+    class targets selected by task["labels"] (classification tasks, e.g. parity)."""
+    if task.get("targets") is not None:
+        return np.asarray(task["targets"], float)
+    return np.where(np.asarray(task["labels"]) > 0, task["target_pos"], task["target_neg"])
 
 
 def _input_clamp(net, pattern, d):
@@ -24,8 +32,29 @@ def readout(net, x):
     return float(x[node, dim] - net.x0[node, dim])
 
 
-def free_phase_mech(net, k, l, pattern, d):
-    return relax_mech(net, k, l, _input_clamp(net, pattern, d), x_init=net.x0)
+def free_phase_mech(net, k, l, pattern, d, x_init=None, robust=True):
+    """Free-phase equilibrium. x_init defaults to the reference geometry x0; pass the previous
+    equilibrium to warm-start (the lattice does not reset between epochs). robust=True: if Newton's
+    line search fails from the start point, fall back to settle() (LM-damped) and flag the rescue in
+    info["rescued"]. A failure of settle() too is a genuine instability and still raises RuntimeError.
+    (2026-11-06: B0 found that a cold start from x0 on a strongly pre-stressed lattice fails Newton's
+    line search even though the equilibrium is unique and stable -- a solver artifact that was being
+    counted as buckling.)"""
+    clamp = _input_clamp(net, pattern, d)
+    x0 = net.x0 if x_init is None else x_init
+    try:
+        x, info = relax_mech(net, k, l, clamp, x_init=x0)
+        info["rescued"] = False
+        # Newton converges to ANY stationary point; a free phase must be a MINIMUM (measured)
+        if robust and info.get("min_eig", 1.0) < 0:
+            raise RuntimeError("stationary point is not a minimum")
+        return x, info
+    except RuntimeError:
+        if not robust:
+            raise
+        x, info = settle(net, k, l, clamp, x_init=x0)
+        info["rescued"] = True
+        return x, info
 
 
 def nudged_phase_mech(net, k, l, pattern, d, target, beta, x_free):
@@ -37,9 +66,26 @@ def nudged_phase_mech(net, k, l, pattern, d, target, beta, x_free):
     return x, info, r_free
 
 
-def local_update_mech(net, k, l, x_free, x_nudged, beta, eta_k, eta_l, audit=None):
+def read_bond_extensions(net, x_free, x_nudged, l, read_noise=None):
+    """The two physical READS of each bond's extension that the local rule differences. read_noise =
+    {"sigma": s, "mode": "independent" | "common", "rng": Generator} adds Gaussian read noise of std s
+    (lattice-spacing units) to the reads: "independent" draws fresh noise for each read (the two-read
+    fragility mechanism, commons H5), "common" applies the same realization to both (a per-bond gauge
+    offset that the contrast cancels). The relaxations themselves stay noiseless."""
     ef = bond_extensions(net, x_free, l)
     en = bond_extensions(net, x_nudged, l)
+    if read_noise is not None and read_noise.get("sigma", 0.0) > 0:
+        s = float(read_noise["sigma"]) * float(read_noise.get("scale", 1.0)); rng = read_noise["rng"]
+        if s <= 0:
+            return ef, en
+        xi1 = rng.standard_normal(ef.shape)
+        xi2 = rng.standard_normal(en.shape) if read_noise.get("mode", "independent") == "independent" else xi1
+        ef = ef + s * xi1; en = en + s * xi2
+    return ef, en
+
+
+def local_update_mech(net, k, l, x_free, x_nudged, beta, eta_k, eta_l, audit=None, read_noise=None):
+    ef, en = read_bond_extensions(net, x_free, x_nudged, l, read_noise)
     mf = m(ef, net.alpha, net.w); mn = m(en, net.alpha, net.w)
     dk = (eta_k / beta) * (0.5 * mf * ef ** 2 - 0.5 * mn * en ** 2)
     # dE/dl = -k*(0.5*m'(e)*e^2 + m(e)*e); contrast free - nudged
@@ -52,30 +98,57 @@ def local_update_mech(net, k, l, x_free, x_nudged, beta, eta_k, eta_l, audit=Non
 
 
 def train_mech(task, k0, l0, beta, eta_k, eta_l, epochs,
-               k_min=1e-2, k_max=1e2, l_min=0.1, l_max=5.0, audit=None):
-    net, patterns, labels, d = task["net"], task["patterns"], task["labels"], task["d"]
-    targets = np.where(labels > 0, task["target_pos"], task["target_neg"])
+               k_min=1e-2, k_max=1e2, l_min=0.1, l_max=5.0, audit=None, read_noise=None):
+    net, patterns, d = task["net"], task["patterns"], task["d"]
+    labels = task.get("labels")
+    targets = task_targets(task)
     k = np.array(k0, float); l = np.array(l0, float)
-    sep_history = []
-    jumps = 0; trials = 0
+    sep_history = []; error_history = []; jump_history = []; min_eig_history = []
+    jumps = 0; trials = 0; rescues = 0
     readouts = np.zeros(len(patterns))
-    for _ in range(epochs):
+    x_prev = [None] * len(patterns)          # warm start: each pattern's last free equilibrium
+    for ep in range(epochs):
+        if read_noise is not None and read_noise.get("anneal_epochs"):
+            # linear anneal of the read-noise std to zero over anneal_epochs (commons noise-as-resource)
+            read_noise["scale"] = max(0.0, 1.0 - ep / float(read_noise["anneal_epochs"]))
         dk = np.zeros_like(k); dl = np.zeros_like(l)
         readouts = np.zeros(len(patterns))
+        epoch_jumps = 0; epoch_min_eig = float("inf")
         for p in range(len(patterns)):
             try:
-                xf, _ = free_phase_mech(net, k, l, patterns[p], d)
+                xf, info_f = free_phase_mech(net, k, l, patterns[p], d, x_init=x_prev[p])
+                rescues += int(info_f.get("rescued", False))
+                epoch_min_eig = min(epoch_min_eig, info_f.get("min_eig", float("inf")))
+                x_prev[p] = xf
                 readouts[p] = readout(net, xf)
                 xn, _, r_free = nudged_phase_mech(net, k, l, patterns[p], d, targets[p], beta, xf)
                 jumped, _ = basin_jump(xf, xn, expected=abs(beta * (targets[p] - r_free)) + 1e-12)
-                jumps += int(jumped); trials += 1
-                ddk, ddl = local_update_mech(net, k, l, xf, xn, beta, eta_k, eta_l, audit=audit)
+                jumps += int(jumped); epoch_jumps += int(jumped); trials += 1
+                ddk, ddl = local_update_mech(net, k, l, xf, xn, beta, eta_k, eta_l, audit=audit,
+                                             read_noise=read_noise)
                 dk += ddk; dl += ddl
             except RuntimeError:
-                # Solver failure = instability event; count it and skip this pattern's update
-                jumps += 1; trials += 1
+                # Solver failure (after the settle() fallback) = genuine instability event; count it,
+                # skip this pattern's update, and drop its warm start
+                jumps += 1; epoch_jumps += 1; trials += 1
+                x_prev[p] = None
+        jump_history.append(epoch_jumps)
+        min_eig_history.append(epoch_min_eig)      # the measured stability margin of the free equilibria
         k = np.clip(k + dk / len(patterns), k_min, k_max)
         l = np.clip(l + dl / len(patterns), l_min, l_max)
-        sep_history.append(two_sided_separation(readouts, labels))
-    return {"k": k, "l": l, "sep_history": sep_history,
-            "jump_rate": jumps / max(trials, 1), "readouts": readouts}
+        if labels is not None:
+            sep_history.append(two_sided_separation(readouts, labels))
+        error_history.append(task_error(readouts, targets))
+    P = len(patterns)
+    tail = max(1, len(jump_history) // 5)
+    first_jump = next((i for i, j in enumerate(jump_history) if j > 0), None)
+    return {"k": k, "l": l, "sep_history": sep_history, "error_history": error_history,
+            "final_error": error_history[-1] if error_history else float("nan"),
+            "best_error": min(error_history) if error_history else float("nan"),
+            "best_epoch": int(np.argmin(error_history)) if error_history else None,
+            "jump_rate": jumps / max(trials, 1),
+            # instability in the LAST 20% of epochs: distinguishes a rule that drives the lattice into
+            # buckling late in training (tail rate -> 1) from a transient early jump
+            "jump_rate_tail": sum(jump_history[-tail:]) / max(tail * P, 1),
+            "first_jump_epoch": first_jump, "rescues": rescues, "readouts": readouts,
+            "min_eig_history": min_eig_history}
